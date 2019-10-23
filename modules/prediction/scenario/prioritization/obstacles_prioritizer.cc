@@ -48,7 +48,7 @@ bool IsLaneSequenceInReferenceLine(
     const ADCTrajectoryContainer* ego_trajectory_container) {
   for (const auto& lane_segment : lane_sequence.lane_segment()) {
     std::string lane_id = lane_segment.lane_id();
-    if (ego_trajectory_container->IsLaneIdInReferenceLine(lane_id)) {
+    if (ego_trajectory_container->IsLaneIdInTargetReferenceLine(lane_id)) {
       return true;
     }
   }
@@ -183,9 +183,35 @@ void ObstaclesPrioritizer::AssignIgnoreLevel() {
 }
 
 void ObstaclesPrioritizer::AssignCautionLevel() {
+  // AssignCautionLevelInJunction();
   AssignCautionLevelCruiseKeepLane();
   AssignCautionLevelCruiseChangeLane();
   AssignCautionLevelByEgoReferenceLine();
+}
+
+void ObstaclesPrioritizer::AssignCautionLevelInJunction() {
+  auto obstacles_container =
+      ContainerManager::Instance()->GetContainer<ObstaclesContainer>(
+          AdapterConfig::PERCEPTION_OBSTACLES);
+  if (obstacles_container == nullptr) {
+    AERROR << "Obstacles container pointer is a null pointer.";
+    return;
+  }
+
+  // TODO(Hongyi): get current junction_id from Storytelling
+  std::string curr_junction_id;
+  const auto& obstacle_ids =
+      obstacles_container->curr_frame_movable_obstacle_ids();
+  for (const int obstacle_id : obstacle_ids) {
+    Obstacle* obstacle_ptr = obstacles_container->GetObstacle(obstacle_id);
+    if (obstacle_ptr == nullptr) {
+      AERROR << "Null obstacle pointer found.";
+      continue;
+    }
+    if (obstacle_ptr->IsInJunction(curr_junction_id)) {
+      obstacle_ptr->SetCaution();
+    }
+  }
 }
 
 void ObstaclesPrioritizer::AssignCautionLevelCruiseKeepLane() {
@@ -302,7 +328,7 @@ void ObstaclesPrioritizer::AssignCautionLevelByEgoReferenceLine() {
     return;
   }
   const std::vector<std::string>& lane_ids =
-      adc_trajectory_container->GetADCLaneIDSequence();
+      adc_trajectory_container->GetADCTargetLaneIDSequence();
   if (lane_ids.empty()) {
     return;
   }
@@ -407,7 +433,7 @@ void ObstaclesPrioritizer::AssignCautionLevelByEgoReferenceLine() {
       continue;
     }
     for (const std::string& lane_id : nearby_lane_ids) {
-      if (!adc_trajectory_container->IsLaneIdInReferenceLine(lane_id)) {
+      if (!adc_trajectory_container->IsLaneIdInTargetReferenceLine(lane_id)) {
         continue;
       }
       std::shared_ptr<const LaneInfo> lane_info_ptr =

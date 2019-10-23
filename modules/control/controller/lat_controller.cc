@@ -97,7 +97,10 @@ bool LatController::LoadControlConf(const ControlConf *control_conf) {
       common::VehicleConfigHelper::Instance()->GetConfig().vehicle_param();
 
   ts_ = control_conf->lat_controller_conf().ts();
-  CHECK_GT(ts_, 0.0) << "[LatController] Invalid control update interval.";
+  if (ts_ <= 0.0) {
+    AERROR << "[MPCController] Invalid control update interval.";
+    return false;
+  }
   cf_ = control_conf->lat_controller_conf().cf();
   cr_ = control_conf->lat_controller_conf().cr();
   preview_window_ = control_conf->lat_controller_conf().preview_window();
@@ -344,7 +347,7 @@ Status LatController::ComputeControlCommand(
 
             auto x_new = cos_theta_diff * x - sin_theta_diff * y + tx;
             auto y_new = sin_theta_diff * x + cos_theta_diff * y + ty;
-            auto theta_new = common::math::WrapAngle(theta - theta_diff);
+            auto theta_new = common::math::NormalizeAngle(theta - theta_diff);
 
             p.mutable_path_point()->set_x(x_new);
             p.mutable_path_point()->set_y(y_new);

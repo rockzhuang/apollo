@@ -26,6 +26,10 @@ DEFINE_double(test_duration, -1.0,
 
 DEFINE_int32(planning_loop_rate, 10, "Loop rate for planning node");
 
+DEFINE_int32(history_max_record_num, 5,
+             "the number of planning history frame to keep");
+DEFINE_int32(max_frame_history_num, 1, "The maximum history frame number");
+
 // scenario related
 DEFINE_string(scenario_bare_intersection_unprotected_config_file,
               "/apollo/modules/planning/conf/"
@@ -39,10 +43,18 @@ DEFINE_string(scenario_narrow_street_u_turn_config_file,
               "/apollo/modules/planning/conf/"
               "scenario/narrow_street_u_turn_config.pb.txt",
               "narrow_street_u_turn scenario config file");
+DEFINE_string(scenario_park_and_go_config_file,
+              "/apollo/modules/planning/conf/"
+              "scenario/park_and_go_config.pb.txt",
+              "park_and_go scenario config file");
 DEFINE_string(scenario_pull_over_config_file,
               "/apollo/modules/planning/conf/"
               "scenario/pull_over_config.pb.txt",
               "The pull_over scenario configuration file");
+DEFINE_string(scenario_emergency_pull_over_config_file,
+              "/apollo/modules/planning/conf/"
+              "scenario/emergency_pull_over_config.pb.txt",
+              "The pull_over_emergency scenario configuration file");
 DEFINE_string(scenario_stop_sign_unprotected_config_file,
               "/apollo/modules/planning/conf/"
               "scenario/stop_sign_unprotected_config.pb.txt",
@@ -63,12 +75,22 @@ DEFINE_string(scenario_valet_parking_config_file,
               "/apollo/modules/planning/conf/"
               "scenario/valet_parking_config.pb.txt",
               "valet_parking scenario config file");
+DEFINE_string(scenario_yield_sign_config_file,
+              "/apollo/modules/planning/conf/"
+              "scenario/yield_sign_config.pb.txt",
+              "yield_sign scenario config file");
 
-DEFINE_bool(enable_scenario_bare_intersection, false,
+DEFINE_bool(enable_scenario_bare_intersection, true,
             "enable bare_intersection scenarios in planning");
+
+DEFINE_bool(enable_scenario_park_and_go, true,
+            "enable park-and-go scenario in planning");
 
 DEFINE_bool(enable_scenario_pull_over, false,
             "enable pull-over scenario in planning");
+
+DEFINE_bool(enable_scenario_emergency_pull_over, false,
+            "enable pull-over-emregency scenario in planning");
 
 DEFINE_bool(enable_pull_over_exit, false,
             "allow pull-over scenario exit to lane follow in planning");
@@ -82,6 +104,9 @@ DEFINE_bool(enable_scenario_stop_sign, true,
 
 DEFINE_bool(enable_scenario_traffic_light, true,
             "enable traffic_light scenarios in planning");
+
+DEFINE_bool(enable_scenario_yield_sign, true,
+            "enable yield_sign scenarios in planning");
 
 DEFINE_bool(enable_force_pull_over_open_space_parking_test, false,
             "enable force_pull_over_open_space_parking_test");
@@ -129,12 +154,12 @@ DEFINE_bool(prioritize_change_lane, false,
 DEFINE_bool(reckless_change_lane, false,
             "Always allow the vehicle change lane. The vehicle may continue "
             "changing lane. This is mainly test purpose");
-DEFINE_double(change_lane_fail_freeze_time, 3.0,
+DEFINE_double(change_lane_fail_freeze_time, 1.0,
               "seconds. Not allowed to change lane this amount of time "
-              "if it just finished change lane or failed to change lane");
+              "if it just failed to change lane");
 DEFINE_double(change_lane_success_freeze_time, 3.0,
               "seconds. Not allowed to change lane this amount of time "
-              "if it just finished change lane or failed to change lane");
+              "if it just finished change lane");
 DEFINE_double(change_lane_min_length, 30.0,
               "meters. If the change lane target has longer length than this "
               "threshold, it can shortcut the default lane.");
@@ -142,7 +167,6 @@ DEFINE_bool(enable_change_lane_decider, false,
             "True to use change lane state machine decider.");
 DEFINE_double(change_lane_speed_relax_percentage, 0.05,
               "The percentage of change lane speed relaxation.");
-DEFINE_int32(max_history_frame_num, 1, "The maximum history frame number");
 
 DEFINE_double(max_collision_distance, 0.1,
               "considered as collision if distance (meters) is smaller than or "
@@ -156,8 +180,6 @@ DEFINE_double(replan_lateral_distance_threshold, 0.5,
               "The lateral distance threshold of replan");
 DEFINE_double(replan_longitudinal_distance_threshold, 2.5,
               "The longitudinal distance threshold of replan");
-DEFINE_bool(estimate_current_vehicle_state, true,
-            "Estimate current vehicle state.");
 
 DEFINE_bool(enable_reference_line_provider_thread, true,
             "Enable reference line provider thread.");
@@ -221,12 +243,15 @@ DEFINE_double(st_max_t, 8, "the maximum t of st boundary");
 DEFINE_bool(enable_nudge_decision, true, "enable nudge decision");
 DEFINE_bool(enable_nudge_slowdown, true,
             "True to slow down when nudge obstacles.");
-DEFINE_bool(enable_alwasy_stop_for_pedestrian, true,
+DEFINE_bool(enable_always_stop_for_pedestrian, true,
             "True to always STOP for pedestrian when path cross");
 
 DEFINE_bool(enable_side_radar, false,
             "If there is no radar on the side,ignore it");
-DEFINE_double(static_decision_nudge_l_buffer, 0.3, "l buffer for nudge");
+DEFINE_double(static_obstacle_nudge_l_buffer, 0.3,
+              "minimum l-distance to nudge a static obstacle (meters)");
+DEFINE_double(nonstatic_obstacle_nudge_l_buffer, 0.4,
+              "minimum l-distance to nudge a non-static obstacle (meters)");
 DEFINE_double(lateral_ignore_buffer, 3.0,
               "If an obstacle's lateral distance is further away than this "
               "distance, ignore it");
@@ -234,8 +259,6 @@ DEFINE_double(max_stop_distance_obstacle, 10.0,
               "max stop distance from in-lane obstacle (meters)");
 DEFINE_double(min_stop_distance_obstacle, 6.0,
               "min stop distance from in-lane obstacle (meters)");
-DEFINE_double(nudge_distance_obstacle, 0.3,
-              "minimum distance to nudge an obstacle (meters)");
 DEFINE_double(follow_min_distance, 3.0,
               "min follow distance for vehicles/bicycles/moving objects");
 DEFINE_double(follow_min_obs_lateral_distance, 2.5,
@@ -243,14 +266,15 @@ DEFINE_double(follow_min_obs_lateral_distance, 2.5,
 DEFINE_double(yield_distance, 3.0,
               "min yield distance for vehicles/moving objects "
               "other than pedestrians/bicycles");
-DEFINE_double(yield_distance_pedestrian_bycicle, 5.0,
+DEFINE_double(yield_distance_pedestrian_bicycle, 5.0,
               "min yield distance for pedestrians/bicycles");
 DEFINE_double(follow_time_buffer, 2.5,
               "time buffer in second to calculate the following distance.");
-DEFINE_double(follow_min_time_sec, 0.1,
-              "min follow time in st region before considering a valid follow");
+DEFINE_double(follow_min_time_sec, 2.0,
+              "min follow time in st region before considering a valid follow,"
+              " this is to differentiate a moving obstacle cross adc's"
+              " current lane and move to a different direction");
 DEFINE_double(stop_line_stop_distance, 1.0, "stop distance from stop line");
-DEFINE_double(max_stop_speed, 0.2, "max speed(m/s) to be considered as a stop");
 DEFINE_double(signal_light_min_pass_s_distance, 4.0,
               "min s_distance for adc to be considered "
               "have passed signal_light (stop_line_end_s)");
@@ -268,6 +292,9 @@ DEFINE_double(virtual_stop_wall_height, 2.0,
               "virtual stop wall height (meters)");
 
 // Path Deciders
+DEFINE_bool(enable_skip_path_tasks, false,
+            "skip all path tasks and use trimmed previous path");
+
 DEFINE_double(obstacle_lat_buffer, 0.4,
               "obstacle lateral buffer (meters) for deciding path boundaries");
 DEFINE_double(obstacle_lon_start_buffer, 3.0,
@@ -281,8 +308,8 @@ DEFINE_double(static_obstacle_speed_threshold, 0.5,
               "or not.");
 DEFINE_double(lane_borrow_max_speed, 5.0,
               "The speed threshold for lane-borrow");
-DEFINE_int32(long_term_blocking_obstacle_cycle_threhold, 3,
-             "The cycle threhold for long-term blocking obstacle.");
+DEFINE_int32(long_term_blocking_obstacle_cycle_threshold, 3,
+             "The cycle threshold for long-term blocking obstacle.");
 
 // Prediction Part
 DEFINE_double(prediction_total_time, 5.0, "Total prediction time");
@@ -319,6 +346,12 @@ DEFINE_double(lag_prediction_protection_distance, 30,
 DEFINE_double(perception_confidence_threshold, 0.4,
               "Skip the obstacle if its confidence is lower than "
               "this threshold.");
+
+DEFINE_double(lane_change_prepare_length, 40.0,
+              "The distance of lane-change preparation on current lane.");
+
+DEFINE_bool(enable_smarter_lane_change, false,
+            "enable smarter lane change with longer preparation distance.");
 
 // QpSt optimizer
 DEFINE_double(slowdown_profile_deceleration, -4.0,

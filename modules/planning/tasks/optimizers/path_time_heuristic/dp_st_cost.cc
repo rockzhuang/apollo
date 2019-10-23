@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <limits>
 
+#include "modules/common/configs/vehicle_config_helper.h"
 #include "modules/planning/common/planning_gflags.h"
 #include "modules/planning/common/speed/st_point.h"
 
@@ -31,21 +32,28 @@ namespace {
 constexpr double kInf = std::numeric_limits<double>::infinity();
 }
 
-DpStCost::DpStCost(const DpStSpeedConfig& config, const double total_time,
+DpStCost::DpStCost(const DpStSpeedConfig& config, const double total_t,
+                   const double total_s,
                    const std::vector<const Obstacle*>& obstacles,
                    const common::TrajectoryPoint& init_point)
-    : config_(config), obstacles_(obstacles), init_point_(init_point) {
+    : config_(config),
+      obstacles_(obstacles),
+      init_point_(init_point),
+      unit_t_(config.unit_t()),
+      total_s_(total_s) {
   int index = 0;
   for (const auto& obstacle : obstacles) {
     boundary_map_[obstacle->path_st_boundary().id()] = index++;
   }
-  unit_t_ = total_time / config_.matrix_dimension_t();
 
   AddToKeepClearRange(obstacles);
 
+  const auto dimension_t =
+      static_cast<uint32_t>(std::ceil(total_t / static_cast<double>(unit_t_))) +
+      1;
   boundary_cost_.resize(obstacles_.size());
   for (auto& vec : boundary_cost_) {
-    vec.resize(config_.matrix_dimension_t(), std::make_pair(-1.0, -1.0));
+    vec.resize(dimension_t, std::make_pair(-1.0, -1.0));
   }
   accel_cost_.fill(-1.0);
   jerk_cost_.fill(-1.0);
@@ -105,7 +113,8 @@ double DpStCost::GetObstacleCost(const StGraphPoint& st_graph_point) {
 
   double cost = 0.0;
   for (const auto* obstacle : obstacles_) {
-    if (!obstacle->IsBlockingObstacle()) {
+    // Not applying obstacle approaching cost to virtual obstacle
+    if (obstacle->IsVirtual()) {
       continue;
     }
 
@@ -157,6 +166,10 @@ double DpStCost::GetObstacleCost(const StGraphPoint& st_graph_point) {
   return cost * unit_t_;
 }
 
+double DpStCost::GetSpatialPotentialCost(const StGraphPoint& point) {
+  return (total_s_ - point.point().s()) * config_.spatial_potential_penalty();
+}
+
 double DpStCost::GetReferenceCost(const STPoint& point,
                                   const STPoint& reference_point) const {
   return config_.reference_weight() * (point.s() - reference_point.s()) *
@@ -164,15 +177,18 @@ double DpStCost::GetReferenceCost(const STPoint& point,
 }
 
 double DpStCost::GetSpeedCost(const STPoint& first, const STPoint& second,
-                              const double speed_limit,
-                              const double soft_speed_limit) const {
+                              const double speed_limit) const {
   double cost = 0.0;
   const double speed = (second.s() - first.s()) / unit_t_;
   if (speed < 0) {
     return kInf;
   }
 
-  if (speed < FLAGS_max_stop_speed && InKeepClearRange(second.s())) {
+  const double max_adc_stop_speed = common::VehicleConfigHelper::Instance()
+                                        ->GetConfig()
+                                        .vehicle_param()
+                                        .max_abs_speed_when_stopped();
+  if (speed < max_adc_stop_speed && InKeepClearRange(second.s())) {
     // first.s in range
     cost += config_.keep_clear_low_speed_penalty() * unit_t_ *
             config_.default_speed_cost();

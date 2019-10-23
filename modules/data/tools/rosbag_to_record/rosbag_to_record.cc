@@ -57,7 +57,8 @@ using apollo::data::ChannelInfo;
 
 void PrintUsage() {
   std::cout << "Usage:\n"
-            << "  rosbag_to_record input.bag output.record" << std::endl;
+            << "  rosbag_to_record input.bag output.record [--small-channels]"
+            << std::endl;
 }
 
 int convert_PointCloud(std::shared_ptr<apollo::drivers::PointCloud> proto,
@@ -147,7 +148,9 @@ int convert_CompressedImage(std::shared_ptr<apollo::drivers::CompressedImage> pr
 }
 
 int main(int argc, char **argv) {
-  if (argc != 3) {
+  const bool small_channels_only =
+      argc == 4 && std::string(argv[3]) == "--small-channels";
+  if (argc != 3 && !small_channels_only) {
     PrintUsage();
     return -1;
   }
@@ -391,6 +394,10 @@ int main(int argc, char **argv) {
 
     else if (channel_name ==
                "/apollo/sensor/velodyne64/compensator/PointCloud2") {
+      if (small_channels_only) {
+        // Skip large channels silently.
+        continue;
+      }
       auto ros_msg = m.instantiate<sensor_msgs::PointCloud2>();
       auto pb_msg = std::make_shared<apollo::drivers::PointCloud>();
       convert_PointCloud(pb_msg, ros_msg);

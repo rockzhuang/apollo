@@ -190,8 +190,9 @@ bool DarkSCNNLanePostprocessor::Process2D(
           if (std::fabs(xy_p(2)) < 1e-6) continue;
           xy_point << xy_p(0) / xy_p(2), xy_p(1) / xy_p(2);
           // Filter out lane line points
-          if (xy_point(0) < 0.0 || xy_point(0) > 300.0 ||
-              std::abs(xy_point(1)) > 25.0) {
+          if (xy_point(0) < 0.0 ||  // This condition is only for front camera
+              xy_point(0) > max_longitudinal_distance_ ||
+              std::abs(xy_point(1)) > 30.0) {
             continue;
           }
           uv_point << static_cast<float>(x * roi_width_ / lane_map.cols),
@@ -223,12 +224,12 @@ bool DarkSCNNLanePostprocessor::Process2D(
   coeffs.resize(lane_type_num_);
   img_coeffs.resize(lane_type_num_);
   for (int i = 1; i < lane_type_num_; ++i) {
+    coeffs[i] << 0, 0, 0, 0;
     if (xy_points[i].size() < minNumPoints_) continue;
     Eigen::Matrix<float, 4, 1> coeff;
     // Solve linear system to estimate polynomial coefficients
-    if (RansacFitting(xy_points[i], &selected_xy_points, &coeff, 200,
+    if (RansacFitting<float>(xy_points[i], &selected_xy_points, &coeff, 200,
                       static_cast<int>(minNumPoints_), 0.1f)) {
-      // if (PolyFit(xy_points[i], max_poly_order, &coeff, true)) {
       coeffs[i] = coeff;
 
       xy_points[i].clear();
@@ -392,6 +393,8 @@ bool DarkSCNNLanePostprocessor::Process2D(
   // AINFO << "Time for writing: " << microseconds - microseconds_2 << " us";
   time_3 += microseconds - microseconds_2;
   ++time_num;
+
+  ADEBUG << "frame->lane_objects.size(): " << frame->lane_objects.size();
 
   ADEBUG << "Avg sampling time: " << time_1 / time_num
          << " Avg fitting time: " << time_2 / time_num

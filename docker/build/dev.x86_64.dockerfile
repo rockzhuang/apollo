@@ -17,6 +17,8 @@ RUN apt-get update -y && \
     git \
     google-perftools \
     graphviz \
+    iproute2 \
+    iputils-ping \
     lcov \
     libblas-dev \
     libboost-all-dev \
@@ -29,6 +31,7 @@ RUN apt-get update -y && \
     locate \
     lsof \
     nfs-common \
+    python-autopep8 \
     realpath \
     shellcheck \
     software-properties-common \
@@ -59,6 +62,7 @@ RUN bash /tmp/installers/install_osqp.sh
 RUN bash /tmp/installers/install_libjsonrpc-cpp.sh
 RUN bash /tmp/installers/install_nlopt.sh
 RUN bash /tmp/installers/install_node.sh
+RUN bash /tmp/installers/install_openh264.sh
 RUN bash /tmp/installers/install_ota.sh
 RUN bash /tmp/installers/install_pcl.sh
 RUN bash /tmp/installers/install_poco.sh

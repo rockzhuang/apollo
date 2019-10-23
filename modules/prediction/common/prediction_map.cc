@@ -277,6 +277,9 @@ bool PredictionMap::NearJunction(const Eigen::Vector2d& point,
 bool PredictionMap::IsPointInJunction(
     const double x, const double y,
     const std::shared_ptr<const JunctionInfo> junction_info_ptr) {
+  if (junction_info_ptr == nullptr) {
+    return false;
+  }
   const Polygon2d& polygon = junction_info_ptr->polygon();
   return polygon.IsPointIn({x, y});
 }
@@ -404,7 +407,8 @@ void PredictionMap::NearbyLanesByCurrentLanes(
         double s = -1.0;
         double l = 0.0;
         GetProjection(point, nearby_lane, &s, &l);
-        if (s >= 0.0 && std::fabs(l) > radius) {
+        if (s < 0.0 || s >= nearby_lane->total_length() ||
+            std::fabs(l) > radius) {
           continue;
         }
         lane_ids.insert(id);
@@ -419,7 +423,8 @@ void PredictionMap::NearbyLanesByCurrentLanes(
         double s = -1.0;
         double l = 0.0;
         GetProjection(point, nearby_lane, &s, &l);
-        if (s >= 0.0 && std::fabs(l) > radius) {
+        if (s < 0.0 || s >= nearby_lane->total_length() ||
+            std::fabs(l) > radius) {
           continue;
         }
         lane_ids.insert(id);

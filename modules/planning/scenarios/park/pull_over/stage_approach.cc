@@ -36,7 +36,7 @@ namespace planning {
 namespace scenario {
 namespace pull_over {
 
-using common::TrajectoryPoint;
+using apollo::common::TrajectoryPoint;
 
 PullOverStageApproach::PullOverStageApproach(
     const ScenarioConfig::StageConfig& config)
@@ -65,7 +65,7 @@ Stage::StageStatus PullOverStageApproach::Process(
     return FinishStage(false);
   }
 
-  // chek path_data to fail sooner
+  // check path_data to fail sooner
   bool path_fail = false;
   const auto& candidate_path_data = reference_line_info.GetCandidatePathData();
   if (!candidate_path_data.empty()) {

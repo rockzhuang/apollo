@@ -46,6 +46,7 @@ DECLARE_string(lidar_16_fusion_topic);
 DECLARE_string(lidar_16_fusion_compensator_topic);
 DECLARE_string(lidar_128_topic);
 DECLARE_string(prediction_topic);
+DECLARE_string(prediction_container_topic);
 DECLARE_string(perception_obstacle_topic);
 DECLARE_string(drive_event_topic);
 DECLARE_string(traffic_light_detection_topic);
@@ -96,6 +97,7 @@ DECLARE_string(hmi_status_topic);
 DECLARE_string(audio_capture_topic);
 DECLARE_string(v2x_obstacle_topic);
 DECLARE_string(v2x_trafficlight_topic);
+DECLARE_string(storytelling_topic);
 // For pandora.
 DECLARE_string(pandora_pointcloud_topic);
 DECLARE_string(pandora_camera_front_color_topic);
@@ -117,3 +119,6 @@ DECLARE_string(tf_static_topic);
 
 // Recorder status topic
 DECLARE_string(recorder_status_topic);
+
+// simulation clock topic
+DECLARE_string(tick_topic);

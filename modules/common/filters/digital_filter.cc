@@ -79,6 +79,11 @@ double DigitalFilter::Filter(const double x_insert) {
   return UpdateLast(y_insert);
 }
 
+void DigitalFilter::reset_values() {
+  x_values_.clear();
+  y_values_.clear();
+}
+
 double DigitalFilter::UpdateLast(const double input) {
   const double diff = std::abs(input - last_);
   if (diff < dead_zone_) {
@@ -114,6 +119,14 @@ const std::vector<double> &DigitalFilter::numerators() const {
 }
 
 double DigitalFilter::dead_zone() const { return dead_zone_; }
+
+const std::deque<double> &DigitalFilter::inputs_queue() const {
+  return x_values_;
+}
+
+const std::deque<double> &DigitalFilter::outputs_queue() const {
+  return y_values_;
+}
 
 }  // namespace common
 }  // namespace apollo

@@ -59,6 +59,7 @@ using apollo::localization::Gps;
 using apollo::localization::LocalizationEstimate;
 using apollo::perception::PerceptionObstacle;
 using apollo::perception::PerceptionObstacles;
+using apollo::perception::TrafficLight;
 using apollo::perception::TrafficLightDetection;
 using apollo::planning::ADCTrajectory;
 using apollo::planning::DecisionResult;
@@ -208,7 +209,7 @@ void UpdateTurnSignal(const apollo::common::VehicleSignal &signal,
 }
 
 void DownsampleCurve(Curve *curve) {
-  if (curve->segment_size() == 0) {
+  if (curve->segment().empty()) {
     return;
   }
 
@@ -327,7 +328,10 @@ void SimulationWorldService::Update() {
     world_.Clear();
     *world_.mutable_auto_driving_car() = car;
 
-    route_paths_.clear();
+    {
+      boost::unique_lock<boost::shared_mutex> writer_lock(route_paths_mutex_);
+      route_paths_.clear();
+    }
 
     to_clear_ = false;
   }
@@ -598,13 +602,11 @@ void SimulationWorldService::UpdateSimulationWorld(
 template <>
 void SimulationWorldService::UpdateSimulationWorld(
     const TrafficLightDetection &traffic_light_detection) {
-  Object *signal = world_.mutable_traffic_signal();
-  if (traffic_light_detection.traffic_light_size() > 0) {
-    const auto &traffic_light = traffic_light_detection.traffic_light(0);
-    signal->set_current_signal(
-        apollo::perception::TrafficLight_Color_Name(traffic_light.color()));
-  } else {
-    signal->set_current_signal("");
+  world_.clear_perceived_signal();
+  for (const auto &traffic_light : traffic_light_detection.traffic_light()) {
+    Object *signal = world_.add_perceived_signal();
+    signal->set_id(traffic_light.id());
+    signal->set_current_signal(TrafficLight_Color_Name(traffic_light.color()));
   }
 }
 
@@ -825,7 +827,7 @@ void SimulationWorldService::UpdateDecision(const DecisionResult &decision_res,
             }
           }
         } else if (decision.has_nudge()) {
-          if (world_obj.polygon_point_size() == 0) {
+          if (world_obj.polygon_point().empty()) {
             if (world_obj.type() == Object_Type_VIRTUAL) {
               AWARN << "No current perception object with id=" << id
                     << " for nudge decision";
@@ -954,6 +956,35 @@ void SimulationWorldService::UpdatePlanningData(const PlanningData &data) {
     planning_data->mutable_pull_over_status()->CopyFrom(
         data.pull_over_status());
   }
+
+  // Update planning signal
+  world_.clear_traffic_signal();
+  if (data.has_signal_light() && data.signal_light().signal_size() > 0) {
+    TrafficLight::Color current_signal = TrafficLight::UNKNOWN;
+    int green_light_count = 0;
+
+    for (auto &signal : data.signal_light().signal()) {
+      switch (signal.color()) {
+        case TrafficLight::RED:
+        case TrafficLight::YELLOW:
+        case TrafficLight::BLACK:
+          current_signal = signal.color();
+          break;
+        case TrafficLight::GREEN:
+          green_light_count++;
+          break;
+        default:
+          break;
+      }
+    }
+
+    if (green_light_count == data.signal_light().signal_size()) {
+      current_signal = TrafficLight::GREEN;
+    }
+
+    world_.mutable_traffic_signal()->set_current_signal(
+        TrafficLight_Color_Name(current_signal));
+  }
 }
 
 template <>
@@ -1022,10 +1053,13 @@ void SimulationWorldService::UpdateSimulationWorld(
 template <>
 void SimulationWorldService::UpdateSimulationWorld(
     const RoutingResponse &routing_response) {
-  if (world_.has_routing_time() &&
-      world_.routing_time() == routing_response.header().timestamp_sec()) {
-    // This routing response has been processed.
-    return;
+  {
+    boost::shared_lock<boost::shared_mutex> reader_lock(route_paths_mutex_);
+    if (world_.has_routing_time() &&
+        world_.routing_time() == routing_response.header().timestamp_sec()) {
+      // This routing response has been processed.
+      return;
+    }
   }
 
   std::vector<Path> paths;
@@ -1034,16 +1068,15 @@ void SimulationWorldService::UpdateSimulationWorld(
   }
 
   world_.clear_route_path();
-  route_paths_.clear();
-  world_.set_routing_time(routing_response.header().timestamp_sec());
 
+  std::vector<RoutePath> route_paths;
   for (const Path &path : paths) {
     // Downsample the path points for frontend display.
     auto sampled_indices =
         DownsampleByAngle(path.path_points(), kAngleThreshold);
 
-    route_paths_.emplace_back();
-    RoutePath *route_path = &route_paths_.back();
+    route_paths.emplace_back();
+    RoutePath *route_path = &route_paths.back();
     for (const size_t index : sampled_indices) {
       const auto &path_point = path.path_points()[index];
       PolygonPoint *route_point = route_path->add_point();
@@ -1057,15 +1090,23 @@ void SimulationWorldService::UpdateSimulationWorld(
       *new_path = *route_path;
     }
   }
+  {
+    boost::unique_lock<boost::shared_mutex> writer_lock(route_paths_mutex_);
+    std::swap(route_paths, route_paths_);
+    world_.set_routing_time(routing_response.header().timestamp_sec());
+  }
 }
 
 Json SimulationWorldService::GetRoutePathAsJson() const {
   Json response;
-  response["routingTime"] = world_.routing_time();
   response["routePath"] = Json::array();
-  // TODO(simulation): there might be a race if there are multiple
-  // RoutingResponse arrived at the same time.
-  for (const auto &route_path : route_paths_) {
+  std::vector<RoutePath> route_paths;
+  {
+    boost::shared_lock<boost::shared_mutex> reader_lock(route_paths_mutex_);
+    response["routingTime"] = world_.routing_time();
+    route_paths = route_paths_;
+  }
+  for (const auto &route_path : route_paths) {
     Json path;
     path["point"] = Json::array();
     for (const auto &route_point : route_path.point()) {

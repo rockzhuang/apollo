@@ -106,6 +106,8 @@ bool ReferenceLineInfo::Init(const std::vector<const Obstacle*>& obstacles) {
   // set lattice planning target speed limit;
   SetCruiseSpeed(FLAGS_default_cruise_speed);
 
+  vehicle_signal_.Clear();
+
   return true;
 }
 
@@ -150,28 +152,28 @@ bool ReferenceLineInfo::GetNeighborLaneInfo(
 
   switch (lane_type) {
     case LaneType::LeftForward: {
-      if (ptr_lane_info->lane().left_neighbor_forward_lane_id_size() == 0) {
+      if (ptr_lane_info->lane().left_neighbor_forward_lane_id().empty()) {
         return false;
       }
       *ptr_lane_id = ptr_lane_info->lane().left_neighbor_forward_lane_id(0);
       break;
     }
     case LaneType::LeftReverse: {
-      if (ptr_lane_info->lane().left_neighbor_reverse_lane_id_size() == 0) {
+      if (ptr_lane_info->lane().left_neighbor_reverse_lane_id().empty()) {
         return false;
       }
       *ptr_lane_id = ptr_lane_info->lane().left_neighbor_reverse_lane_id(0);
       break;
     }
     case LaneType::RightForward: {
-      if (ptr_lane_info->lane().right_neighbor_forward_lane_id_size() == 0) {
+      if (ptr_lane_info->lane().right_neighbor_forward_lane_id().empty()) {
         return false;
       }
       *ptr_lane_id = ptr_lane_info->lane().right_neighbor_forward_lane_id(0);
       break;
     }
     case LaneType::RightReverse: {
-      if (ptr_lane_info->lane().right_neighbor_reverse_lane_id_size() == 0) {
+      if (ptr_lane_info->lane().right_neighbor_reverse_lane_id().empty()) {
         return false;
       }
       *ptr_lane_id = ptr_lane_info->lane().right_neighbor_reverse_lane_id(0);
@@ -369,7 +371,7 @@ Obstacle* ReferenceLineInfo::AddObstacle(const Obstacle* obstacle) {
   }
   mutable_obstacle->SetPerceptionSlBoundary(perception_sl);
   mutable_obstacle->CheckLaneBlocking(reference_line_);
-  if (obstacle->IsLaneBlocking()) {
+  if (mutable_obstacle->IsLaneBlocking()) {
     ADEBUG << "obstacle [" << obstacle->Id() << "] is lane blocking.";
   } else {
     ADEBUG << "obstacle [" << obstacle->Id() << "] is NOT lane blocking.";
@@ -549,17 +551,22 @@ std::string ReferenceLineInfo::PathSpeedDebugString() const {
                                       "speed_data:", speed_data_.DebugString());
 }
 
-void ReferenceLineInfo::ExportTurnSignal(VehicleSignal* signal) const {
-  // set vehicle change lane signal
-  CHECK_NOTNULL(signal);
+void ReferenceLineInfo::SetTurnSignal(
+    common::VehicleSignal* vehicle_signal) const {
+  CHECK_NOTNULL(vehicle_signal);
 
-  signal->Clear();
-  signal->set_turn_signal(VehicleSignal::TURN_NONE);
+  if (vehicle_signal->has_turn_signal() &&
+      vehicle_signal->turn_signal() != VehicleSignal::TURN_NONE) {
+    return;
+  }
+
+  // set turn signal based on change lane
+  vehicle_signal->set_turn_signal(VehicleSignal::TURN_NONE);
   if (IsChangeLanePath()) {
     if (Lanes().PreviousAction() == routing::ChangeLaneType::LEFT) {
-      signal->set_turn_signal(VehicleSignal::TURN_LEFT);
+      vehicle_signal->set_turn_signal(VehicleSignal::TURN_LEFT);
     } else if (Lanes().PreviousAction() == routing::ChangeLaneType::RIGHT) {
-      signal->set_turn_signal(VehicleSignal::TURN_RIGHT);
+      vehicle_signal->set_turn_signal(VehicleSignal::TURN_RIGHT);
     }
     return;
   }
@@ -576,10 +583,10 @@ void ReferenceLineInfo::ExportTurnSignal(VehicleSignal* signal) const {
     }
     const auto& turn = seg.lane->lane().turn();
     if (turn == hdmap::Lane::LEFT_TURN) {
-      signal->set_turn_signal(VehicleSignal::TURN_LEFT);
+      vehicle_signal->set_turn_signal(VehicleSignal::TURN_LEFT);
       break;
     } else if (turn == hdmap::Lane::RIGHT_TURN) {
-      signal->set_turn_signal(VehicleSignal::TURN_RIGHT);
+      vehicle_signal->set_turn_signal(VehicleSignal::TURN_RIGHT);
       break;
     } else if (turn == hdmap::Lane::U_TURN) {
       // check left or right by geometry.
@@ -592,13 +599,29 @@ void ReferenceLineInfo::ExportTurnSignal(VehicleSignal* signal) const {
       auto start_to_middle = middle_xy - start_xy;
       auto start_to_end = end_xy - start_xy;
       if (start_to_middle.CrossProd(start_to_end) < 0) {
-        signal->set_turn_signal(VehicleSignal::TURN_RIGHT);
+        vehicle_signal->set_turn_signal(VehicleSignal::TURN_RIGHT);
       } else {
-        signal->set_turn_signal(VehicleSignal::TURN_LEFT);
+        vehicle_signal->set_turn_signal(VehicleSignal::TURN_LEFT);
       }
       break;
     }
   }
+}
+
+void ReferenceLineInfo::SetTurnSignal(
+    const VehicleSignal::TurnSignal& turn_signal) {
+  vehicle_signal_.set_turn_signal(turn_signal);
+}
+
+void ReferenceLineInfo::SetEmergencyLight() {
+  vehicle_signal_.set_emergency_light(true);
+}
+
+void ReferenceLineInfo::ExportVehicleSignal(
+    common::VehicleSignal* vehicle_signal) const {
+  CHECK_NOTNULL(vehicle_signal);
+  *vehicle_signal = vehicle_signal_;
+  SetTurnSignal(vehicle_signal);
 }
 
 bool ReferenceLineInfo::ReachedDestination() const {
@@ -625,7 +648,7 @@ double ReferenceLineInfo::SDistanceToDestination() const {
 
 void ReferenceLineInfo::ExportDecision(DecisionResult* decision_result) const {
   MakeDecision(decision_result);
-  ExportTurnSignal(decision_result->mutable_vehicle_signal());
+  ExportVehicleSignal(decision_result->mutable_vehicle_signal());
   auto* main_decision = decision_result->mutable_main_decision();
   if (main_decision->has_stop()) {
     main_decision->mutable_stop()->set_change_lane_type(
@@ -869,6 +892,39 @@ int ReferenceLineInfo::GetPnCJunction(
     }
   }
   return 0;
+}
+
+void ReferenceLineInfo::SetBlockingObstacle(
+    const std::string& blocking_obstacle_id) {
+  blocking_obstacle_ = path_decision_.Find(blocking_obstacle_id);
+}
+
+std::vector<common::SLPoint> ReferenceLineInfo::GetAllStopDecisionSLPoint()
+    const {
+  std::vector<common::SLPoint> result;
+  for (const auto* obstacle : path_decision_.obstacles().Items()) {
+    const auto& object_decision = obstacle->LongitudinalDecision();
+    if (!object_decision.has_stop()) {
+      continue;
+    }
+    apollo::common::PointENU stop_point = object_decision.stop().stop_point();
+    common::SLPoint stop_line_sl;
+    reference_line_.XYToSL({stop_point.x(), stop_point.y()}, &stop_line_sl);
+    if (stop_line_sl.s() <= 0 || stop_line_sl.s() >= reference_line_.Length()) {
+      continue;
+    }
+    result.push_back(stop_line_sl);
+  }
+
+  // sort by s
+  if (!result.empty()) {
+    std::sort(result.begin(), result.end(),
+              [](const common::SLPoint& a, const common::SLPoint& b) {
+                return a.s() < b.s();
+              });
+  }
+
+  return result;
 }
 
 }  // namespace planning

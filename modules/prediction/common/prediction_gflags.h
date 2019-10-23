@@ -42,6 +42,10 @@ DECLARE_double(junction_search_radius);
 DECLARE_double(pedestrian_nearby_lane_search_radius);
 DECLARE_int32(road_graph_max_search_horizon);
 
+// Semantic Map
+DECLARE_double(base_image_half_range);
+DECLARE_bool(img_show_semantic_map);
+
 // Scenario
 DECLARE_double(junction_distance_threshold);
 DECLARE_bool(enable_all_junction);

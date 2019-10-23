@@ -128,7 +128,7 @@ cc_library(
         "//modules/prediction/evaluator",
     ] + select({
         "//tools/platforms:use_gpu": [
-            "@pytorch",
+            "@pytorch_gpu",
         ],
         "//conditions:default": [
             "@pytorch",
@@ -171,7 +171,7 @@ cc_library(
         "//modules/prediction/evaluator",
     ] + select({
         "//tools/platforms:use_gpu": [
-            "@pytorch",
+            "@pytorch_gpu",
         ],
         "//conditions:default": [
             "@pytorch",
@@ -196,7 +196,7 @@ cc_library(
         "//modules/prediction/evaluator",
     ] + select({
         "//tools/platforms:use_gpu": [
-            "@pytorch",
+            "@pytorch_gpu",
         ],
         "//conditions:default": [
             "@pytorch",
@@ -236,7 +236,7 @@ cc_library(
         "//modules/prediction/evaluator",
     ] + select({
         "//tools/platforms:use_gpu": [
-            "@pytorch",
+            "@pytorch_gpu",
         ],
         "//conditions:default": [
             "@pytorch",
@@ -260,7 +260,32 @@ cc_library(
         "//modules/prediction/evaluator",
     ] + select({
         "//tools/platforms:use_gpu": [
+            "@pytorch_gpu",
+        ],
+        "//conditions:default": [
             "@pytorch",
+        ],
+    }),
+)
+
+cc_library(
+    name = "semantic_lstm_evaluator",
+    srcs = [
+        "semantic_lstm_evaluator.cc",
+    ],
+    hdrs = [
+        "semantic_lstm_evaluator.h",
+    ],
+    copts = [
+        "-DMODULE_NAME=\\\"prediction\\\"",
+    ],
+    deps = [
+        "//modules/prediction/common:prediction_util",
+        "//modules/prediction/common:semantic_map",
+        "//modules/prediction/evaluator",
+    ] + select({
+        "//tools/platforms:use_gpu": [
+            "@pytorch_gpu",
         ],
         "//conditions:default": [
             "@pytorch",

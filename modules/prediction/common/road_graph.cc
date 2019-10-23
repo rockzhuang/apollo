@@ -252,7 +252,7 @@ void RoadGraph::ConstructLaneSequence(
   // or if there is no more successor lane_segment.
   if (search_forward_direction) {
     if (lane_segment.end_s() < lane_info_ptr->total_length() ||
-        lane_info_ptr->lane().successor_id_size() == 0) {
+        lane_info_ptr->lane().successor_id().empty()) {
       LaneSequence* sequence = lane_graph_ptr->add_lane_sequence();
       for (const auto& it : *lane_segments) {
         *(sequence->add_lane_segment()) = it;
@@ -262,7 +262,7 @@ void RoadGraph::ConstructLaneSequence(
     }
   } else {
     if (lane_segment.start_s() > 0.0 ||
-        lane_info_ptr->lane().predecessor_id_size() == 0) {
+        lane_info_ptr->lane().predecessor_id().empty()) {
       LaneSequence* sequence = lane_graph_ptr->add_lane_sequence();
       for (const auto& it : *lane_segments) {
         *(sequence->add_lane_segment()) = it;
@@ -333,10 +333,18 @@ RoadGraph::LaneWithSmallestAverageCurvature(
   CHECK(!lane_infos.empty());
   size_t sample_size = FLAGS_sample_size_for_average_lane_curvature;
   std::shared_ptr<const hdmap::LaneInfo> selected_lane_info = lane_infos[0];
+  if (selected_lane_info == nullptr) {
+    AERROR << "Lane Vector first element: selected_lane_info is nullptr.";
+    return nullptr;
+  }
   double smallest_curvature =
       AverageCurvature(selected_lane_info->id().id(), sample_size);
   for (size_t i = 1; i < lane_infos.size(); ++i) {
     std::shared_ptr<const hdmap::LaneInfo> lane_info = lane_infos[i];
+    if (lane_info == nullptr) {
+      AWARN << "Lane vector element: one lane_info is nullptr.";
+      continue;
+    }
     double curvature = AverageCurvature(lane_info->id().id(), sample_size);
     if (curvature < smallest_curvature) {
       smallest_curvature = curvature;

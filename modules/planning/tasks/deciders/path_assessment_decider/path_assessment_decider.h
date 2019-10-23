@@ -68,6 +68,9 @@ class PathAssessmentDecider : public Decider {
   bool IsCollidingWithStaticObstacles(
       const ReferenceLineInfo& reference_line_info, const PathData& path_data);
 
+  bool IsStopOnReverseNeighborLane(const ReferenceLineInfo& reference_line_info,
+                                   const PathData& path_data);
+
   // * @brief Check if the path ever returns to the self-lane.
   //   * @param reference_line_info
   //   * @param path_data
@@ -95,8 +98,6 @@ class PathAssessmentDecider : public Decider {
       std::vector<std::tuple<double, PathData::PathPointType, double>>* const
           path_point_decision);
 
-  /////////////////////////////////////////////////////////////////////////////
-  // Below are helper functions.
   void RecordDebugInfo(const PathData& path_data, const std::string& debug_name,
                        ReferenceLineInfo* const reference_line_info);
 };
@@ -111,6 +112,9 @@ int ContainsOutOnReverseLane(
 int GetBackToInLaneIndex(
     const std::vector<std::tuple<double, PathData::PathPointType, double>>&
         path_point_decision);
+
+bool ComparePathData(const PathData& lhs, const PathData& rhs,
+                     const Obstacle* blocking_obstacle);
 
 }  // namespace planning
 }  // namespace apollo

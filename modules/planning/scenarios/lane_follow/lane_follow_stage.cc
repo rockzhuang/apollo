@@ -46,11 +46,11 @@ namespace planning {
 namespace scenario {
 namespace lane_follow {
 
-using common::ErrorCode;
-using common::SLPoint;
-using common::Status;
-using common::TrajectoryPoint;
-using common::time::Clock;
+using apollo::common::ErrorCode;
+using apollo::common::SLPoint;
+using apollo::common::Status;
+using apollo::common::TrajectoryPoint;
+using apollo::common::time::Clock;
 
 namespace {
 constexpr double kPathOptimizationFallbackCost = 2e4;
@@ -128,11 +128,15 @@ Stage::StageStatus LaneFollowStage::Process(
       if (reference_line_info.IsChangeLanePath()) {
         ADEBUG << "reference line is lane change ref.";
         if (reference_line_info.Cost() < kStraightForwardLineCost &&
-            LaneChangeDecider::IsClearToChangeLane(&reference_line_info)) {
+            (LaneChangeDecider::IsClearToChangeLane(&reference_line_info) ||
+             FLAGS_enable_smarter_lane_change)) {
+          // If the path and speed optimization succeed on target lane while
+          // under smart lane-change or IsClearToChangeLane under older version
           has_drivable_reference_line = true;
           reference_line_info.SetDrivable(true);
           ADEBUG << "\tclear for lane change";
         } else {
+          LaneChangeDecider::UpdateStatus(false, &reference_line_info);
           reference_line_info.SetDrivable(false);
           ADEBUG << "\tlane change failed";
         }

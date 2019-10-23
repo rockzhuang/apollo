@@ -32,6 +32,7 @@
 #include "modules/common/proto/geometry.pb.h"
 #include "modules/common/vehicle_state/proto/vehicle_state.pb.h"
 #include "modules/localization/proto/pose.pb.h"
+#include "modules/planning/proto/pad_msg.pb.h"
 #include "modules/planning/proto/planning.pb.h"
 #include "modules/planning/proto/planning_config.pb.h"
 #include "modules/planning/proto/planning_internal.pb.h"
@@ -94,6 +95,10 @@ class Frame {
   Obstacle *Find(const std::string &id);
 
   const ReferenceLineInfo *FindDriveReferenceLineInfo();
+
+  const ReferenceLineInfo *FindTargetReferenceLineInfo();
+
+  const ReferenceLineInfo *FindFailedReferenceLineInfo();
 
   const ReferenceLineInfo *DriveReferenceLineInfo() const;
 
@@ -158,6 +163,10 @@ class Frame {
 
   perception::TrafficLight GetSignal(const std::string &traffic_light_id) const;
 
+  const DrivingAction &GetPadMsgDrivingAction() const {
+    return pad_msg_driving_action_;
+  }
+
  private:
   common::Status InitFrameData();
 
@@ -181,6 +190,9 @@ class Frame {
   void AddObstacle(const Obstacle &obstacle);
 
   void ReadTrafficLights();
+
+  void ReadPadMsgDrivingAction();
+  void ResetPadMsgDrivingAction();
 
  private:
   uint32_t sequence_num_ = 0;
@@ -216,6 +228,8 @@ class Frame {
   common::monitor::MonitorLogBuffer monitor_logger_buffer_;
 
   std::tuple<bool, double, double, double> pull_over_info_;
+
+  static DrivingAction pad_msg_driving_action_;
 };
 
 class FrameHistory : public IndexedQueue<uint32_t, Frame> {

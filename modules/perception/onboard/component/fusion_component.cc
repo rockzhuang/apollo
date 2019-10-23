@@ -15,9 +15,9 @@
  *****************************************************************************/
 #include "modules/perception/onboard/component/fusion_component.h"
 
+#include "modules/common/time/time.h"
 #include "modules/perception/base/object_pool_types.h"
 #include "modules/perception/lib/utils/perf.h"
-#include "modules/perception/lib/utils/time_util.h"
 #include "modules/perception/onboard/common_flags/common_flags.h"
 #include "modules/perception/onboard/msg_serializer/msg_serializer.h"
 
@@ -51,8 +51,6 @@ bool FusionComponent::Init() {
 }
 
 bool FusionComponent::Proc(const std::shared_ptr<SensorFrameMessage>& message) {
-  AINFO << "Enter FusionComponent proc. message->sensor_id_: "
-        << message->sensor_id_;
   if (message->process_stage_ == ProcessStage::SENSOR_FUSION) {
     return true;
   }
@@ -64,8 +62,8 @@ bool FusionComponent::Proc(const std::shared_ptr<SensorFrameMessage>& message) {
   if (status) {
     // TODO(conver sensor id)
     if (message->sensor_id_ != fusion_main_sensor_) {
-      AINFO << "Fusion receive non " << fusion_main_sensor_
-            << " message, skip send.";
+      AINFO << "Fusion receive from " << message->sensor_id_ << "not from "
+            << fusion_main_sensor_ << ". Skip send.";
     } else {
       // Send("/apollo/perception/obstacles", out_message);
       writer_->Write(out_message);
@@ -184,7 +182,7 @@ bool FusionComponent::InternalProc(
   PERCEPTION_PERF_BLOCK_END_WITH_INDICATOR(
       std::string("fusion_serialize_message"), in_message->sensor_id_);
 
-  const double cur_time = lib::TimeUtil::GetCurrentTime();
+  const double cur_time = apollo::common::time::Clock::NowInSeconds();
   const double latency = (cur_time - timestamp) * 1e3;
   AINFO << "FRAME_STATISTICS:Obstacle:End:msg_time["
         << std::to_string(timestamp) << "]:cur_time["

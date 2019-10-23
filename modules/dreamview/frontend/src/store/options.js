@@ -1,6 +1,13 @@
-import { observable, action, computed, extendObservable } from "mobx";
+import { observable, action, computed, extendObservable, isComputed } from "mobx";
 
 import MENU_DATA from "store/config/MenuData";
+
+export const MONITOR_MENU = Object.freeze({
+    PNC_MONITOR: 'showPNCMonitor',
+    DATA_COLLECTION_MONITOR: 'showDataCollectionMonitor',
+    TELEOP_CONSOLE_MONITOR: 'showTeleopConsoleMonitor',
+    CAMERA_PARAM: 'showCameraView',
+});
 
 export default class Options {
     // Toggles added by planning paths when pnc monitor is on
@@ -15,7 +22,7 @@ export default class Options {
             "showRouteEditingBar",
             "showDataRecorder",
         ];
-        this.secondarySideBarOptions = ["showPOI", "enableAudioCapture"];
+        this.secondarySideBarOptions = ["showPOI"];
 
         // Set options and their default values from PARAMETERS.options
         this.resetOptions();
@@ -61,7 +68,30 @@ export default class Options {
     }
 
     @computed get showMonitor() {
-        return this.showPNCMonitor || this.showDataCollectionMonitor;
+        for (const option of Object.values(MONITOR_MENU)) {
+            if (this[option]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @computed get monitorName() {
+        if (this.showTeleopConsoleMonitor) {
+            return MONITOR_MENU.TELEOP_CONSOLE_MONITOR;
+        } else if (this.showCameraView) {
+            return MONITOR_MENU.CAMERA_PARAM;
+        } else if (this.showDataCollectionMonitor) {
+            return MONITOR_MENU.DATA_COLLECTION_MONITOR;
+        } else if (this.showPNCMonitor) {
+            return MONITOR_MENU.PNC_MONITOR;
+        } else {
+            return null;
+        }
+    }
+
+    @computed get showCameraView() {
+        return this.cameraAngle === "CameraView";
     }
 
     @action toggle(option, isCustomized) {
@@ -70,10 +100,19 @@ export default class Options {
         } else {
             this[option] = !this[option];
         }
+
         // Disable other mutually exclusive options
         if (this[option] && this.mainSideBarOptions.includes(option)) {
             for (const other of this.mainSideBarOptions) {
                 if (other !== option) {
+                    this[other] = false;
+                }
+            }
+        }
+        const monitorOptions = new Set(Object.values(MONITOR_MENU));
+        if (monitorOptions.has(option)) {
+            for (const other of monitorOptions) {
+                if (other !== option && !isComputed(this, other)) {
                     this[other] = false;
                 }
             }
@@ -96,8 +135,7 @@ export default class Options {
         }
 
         if (option === "showTasks" ||
-            option === "showModuleController" ||
-            option === "enableAudioCapture"
+            option === "showModuleController"
         ) {
             return false;
         } else if (option === "showRouteEditingBar") {

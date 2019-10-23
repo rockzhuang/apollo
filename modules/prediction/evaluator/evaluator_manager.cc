@@ -40,6 +40,7 @@
 #include "modules/prediction/evaluator/vehicle/lane_scanning_evaluator.h"
 #include "modules/prediction/evaluator/vehicle/mlp_evaluator.h"
 #include "modules/prediction/evaluator/vehicle/rnn_evaluator.h"
+#include "modules/prediction/evaluator/vehicle/semantic_lstm_evaluator.h"
 
 namespace apollo {
 namespace prediction {
@@ -104,6 +105,7 @@ void EvaluatorManager::RegisterEvaluators() {
   RegisterEvaluator(ObstacleConf::LANE_AGGREGATING_EVALUATOR);
   RegisterEvaluator(ObstacleConf::PEDESTRIAN_INTERACTION_EVALUATOR);
   RegisterEvaluator(ObstacleConf::JUNCTION_MAP_EVALUATOR);
+  RegisterEvaluator(ObstacleConf::SEMANTIC_LSTM_EVALUATOR);
 }
 
 void EvaluatorManager::Init(const PredictionConf& config) {
@@ -124,7 +126,6 @@ void EvaluatorManager::Init(const PredictionConf& config) {
       switch (obstacle_conf.obstacle_type()) {
         case PerceptionObstacle::VEHICLE: {
           if (obstacle_conf.obstacle_status() == ObstacleConf::ON_LANE) {
-            vehicle_on_lane_evaluator_ = obstacle_conf.evaluator_type();
             if (obstacle_conf.priority_type() == ObstaclePriority::CAUTION) {
               vehicle_on_lane_caution_evaluator_ =
                   obstacle_conf.evaluator_type();
@@ -144,6 +145,11 @@ void EvaluatorManager::Init(const PredictionConf& config) {
                   obstacle_conf.evaluator_type();
             } else {
               vehicle_in_junction_evaluator_ = obstacle_conf.evaluator_type();
+            }
+            if (FLAGS_prediction_offline_mode ==
+                PredictionConstants::kDumpDataForLearning) {
+              vehicle_in_junction_evaluator_ =
+                  ObstacleConf::LANE_SCANNING_EVALUATOR;
             }
           }
           break;
@@ -222,10 +228,6 @@ void EvaluatorManager::Run() {
         });
   } else {
     for (int id : obstacles_container->curr_frame_considered_obstacle_ids()) {
-      if (id < 0) {
-        ADEBUG << "The obstacle has invalid id [" << id << "].";
-        continue;
-      }
       Obstacle* obstacle = obstacles_container->GetObstacle(id);
 
       if (obstacle == nullptr) {
@@ -418,6 +420,10 @@ std::unique_ptr<Evaluator> EvaluatorManager::CreateEvaluator(
     }
     case ObstacleConf::JUNCTION_MAP_EVALUATOR: {
       evaluator_ptr.reset(new JunctionMapEvaluator());
+      break;
+    }
+    case ObstacleConf::SEMANTIC_LSTM_EVALUATOR: {
+      evaluator_ptr.reset(new SemanticLSTMEvaluator());
       break;
     }
     default: { break; }

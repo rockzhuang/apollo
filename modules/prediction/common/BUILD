@@ -77,6 +77,7 @@ cc_library(
     deps = [
         "//modules/common/util",
         "//modules/prediction/common:prediction_gflags",
+        "//modules/prediction/container/obstacles:obstacle",
         "//modules/prediction/proto:offline_features_proto",
         "//modules/prediction/proto:prediction_proto",
     ],
@@ -253,11 +254,6 @@ cc_library(
     copts = [
         "-DMODULE_NAME=\\\"prediction\\\"",
     ],
-    linkopts = [
-        "-lopencv_core",
-        "-lopencv_highgui",
-        "-lopencv_imgproc",
-    ],
     deps = [
         ":prediction_gflags",
         "//cyber/common",
@@ -267,6 +263,7 @@ cc_library(
         "//modules/prediction/container/pose:pose_container",
         "//modules/prediction/proto:feature_proto",
         "//modules/prediction/proto:semantic_map_config_proto",
+        "@opencv",
     ],
 )
 

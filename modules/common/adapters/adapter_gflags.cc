@@ -80,6 +80,8 @@ DEFINE_string(lidar_16_fusion_compensator_topic,
 DEFINE_string(lidar_128_topic, "/apollo/sensor/lidar128/PointCloud2",
               "128 beam lidar topic name");
 DEFINE_string(prediction_topic, "/apollo/prediction", "prediction topic name");
+DEFINE_string(prediction_container_topic, "/apollo/prediction_container",
+              "prediction container submodule topic name");
 DEFINE_string(perception_obstacle_topic, "/apollo/perception/obstacles",
               "perception obstacle topic name");
 DEFINE_string(drive_event_topic, "/apollo/drive_event",
@@ -192,6 +194,9 @@ DEFINE_string(v2x_obstacle_topic, "/apollo/v2x/obstacles",
               "v2x obstacles topic name");
 DEFINE_string(v2x_trafficlight_topic, "/apollo/v2x/traffic_light",
               "v2x trafficlight topic name");
+DEFINE_string(storytelling_topic, "/apollo/storytelling",
+              "Storytelling topic.");
+
 // For pandora.
 DEFINE_string(pandora_pointcloud_topic,
               "/apollo/sensor/pandora/hesai40/PointCloud2",
@@ -224,3 +229,4 @@ DEFINE_string(tf_topic, "/tf", "Transform topic.");
 DEFINE_string(tf_static_topic, "/tf_static", "Transform static topic.");
 DEFINE_string(recorder_status_topic, "/apollo/data/recorder/status",
               "Recorder status topic.");
+DEFINE_string(tick_topic, "/clock", "Tick topic.");

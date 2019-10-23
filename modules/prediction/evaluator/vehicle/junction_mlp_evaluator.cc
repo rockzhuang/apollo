@@ -94,7 +94,7 @@ bool JunctionMLPEvaluator::Evaluate(Obstacle* obstacle_ptr) {
     FeatureOutput::InsertDataForLearning(*latest_feature_ptr, feature_values,
                                          "junction", nullptr);
     ADEBUG << "Save extracted features for learning locally.";
-    return false;  // Skip Compute probability for offline mode
+    return true;  // Skip Compute probability for offline mode
   }
   std::vector<torch::jit::IValue> torch_inputs;
   int input_dim = static_cast<int>(
@@ -103,12 +103,11 @@ bool JunctionMLPEvaluator::Evaluate(Obstacle* obstacle_ptr) {
   for (size_t i = 0; i < feature_values.size(); ++i) {
     torch_input[0][i] = static_cast<float>(feature_values[i]);
   }
-  torch_inputs.push_back(torch_input.to(device_));
+  torch_inputs.push_back(std::move(torch_input.to(device_)));
   std::vector<double> probability;
   if (latest_feature_ptr->junction_feature().junction_exit_size() > 1) {
-    CHECK_NOTNULL(torch_model_ptr_);
     at::Tensor torch_output_tensor =
-        torch_model_ptr_->forward(torch_inputs).toTensor().to(torch::kCPU);
+        torch_model_.forward(torch_inputs).toTensor().to(torch::kCPU);
     auto torch_output = torch_output_tensor.accessor<float, 2>();
     for (int i = 0; i < torch_output.size(1); ++i) {
       probability.push_back(static_cast<double>(torch_output[0][i]));
@@ -127,7 +126,7 @@ bool JunctionMLPEvaluator::Evaluate(Obstacle* obstacle_ptr) {
   LaneGraph* lane_graph_ptr =
       latest_feature_ptr->mutable_lane()->mutable_lane_graph();
   CHECK_NOTNULL(lane_graph_ptr);
-  if (lane_graph_ptr->lane_sequence_size() == 0) {
+  if (lane_graph_ptr->lane_sequence().empty()) {
     AERROR << "Obstacle [" << id << "] has no lane sequences.";
     return false;
   }
@@ -144,11 +143,7 @@ bool JunctionMLPEvaluator::Evaluate(Obstacle* obstacle_ptr) {
                                       latest_feature_ptr->raw_velocity().x());
     double d_idx = (angle / (2.0 * M_PI) + 1.0 / 24.0) * 12.0;
     int idx = static_cast<int>(floor(d_idx >= 0 ? d_idx : d_idx + 12));
-    int prev_idx = idx == 0 ? 11 : idx - 1;
-    int post_idx = idx == 11 ? 0 : idx + 1;
-    junction_exit_prob[junction_exit.exit_lane_id()] =
-        probability[idx] * 0.5 + probability[prev_idx] * 0.25 +
-        probability[post_idx] * 0.25;
+    junction_exit_prob[junction_exit.exit_lane_id()] = probability[idx];
   }
 
   for (int i = 0; i < lane_graph_ptr->lane_sequence_size(); ++i) {
@@ -363,13 +358,12 @@ void JunctionMLPEvaluator::SetJunctionFeatureValues(
 }
 
 void JunctionMLPEvaluator::LoadModel() {
-  // TODO(all) uncomment the following when cuda issue is resolved
-  // if (torch::cuda::is_available()) {
-  //   ADEBUG << "CUDA is available for JunctionMLPEvaluator!";
-  //   device_ = torch::Device(torch::kCUDA);
-  // }
+  if (FLAGS_use_cuda && torch::cuda::is_available()) {
+    ADEBUG << "CUDA is available";
+    device_ = torch::Device(torch::kCUDA);
+  }
   torch::set_num_threads(1);
-  torch_model_ptr_ =
+  torch_model_ =
       torch::jit::load(FLAGS_torch_vehicle_junction_mlp_file, device_);
 }
 

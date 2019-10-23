@@ -34,6 +34,7 @@
 #include "modules/prediction/common/prediction_gflags.h"
 #include "modules/prediction/proto/feature.pb.h"
 #include "modules/prediction/proto/prediction_conf.pb.h"
+#include "modules/prediction/proto/prediction_obstacle.pb.h"
 
 /**
  * @namespace apollo::prediction
@@ -94,7 +95,7 @@ class Obstacle {
    */
   double timestamp() const;
 
-  bool ReceivedNewerMessage(const double timestamp) const;
+  bool ReceivedOlderMessage(const double timestamp) const;
 
   /**
    * @brief Get the ith feature from latest to earliest.
@@ -187,7 +188,7 @@ class Obstacle {
    * @param junction ID
    * @return If the obstacle is in a junction.
    */
-  bool IsInJunction(const std::string& junction_id);
+  bool IsInJunction(const std::string& junction_id) const;
 
   /**
    * @brief Check if the obstacle is close to a junction exit.
@@ -250,6 +251,8 @@ class Obstacle {
   void SetPredictorType(const ObstacleConf::PredictorType& predictor_type);
 
   const ObstacleConf& obstacle_conf() { return obstacle_conf_; }
+
+  PredictionObstacle GeneratePredictionObstacle();
 
  private:
   Obstacle() = default;
@@ -343,6 +346,10 @@ class Obstacle {
       bool is_left, int recursion_depth,
       std::list<std::string>* const lane_ids_ordered,
       std::unordered_set<std::string>* const existing_lane_ids);
+
+  bool HasJunctionExitLane(
+      const LaneSequence& lane_sequence,
+      const std::unordered_set<std::string>& exit_lane_id_set);
 
  private:
   int id_ = FLAGS_ego_vehicle_id;

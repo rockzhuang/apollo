@@ -19,15 +19,29 @@ const Navigation = Loadable({
 class SceneView extends React.Component {
     render() {
         const { sceneDimension, meters, monitor,
-                options, trafficSignal, video, hmi } = this.props.store;
+                options, trafficSignal, video, hmi, cameraData } = this.props.store;
 
         const sceneHeightOffset = OFFLINE_PLAYBACK ? 40 /* height of playback control */ : 0;
+
+        let width = null;
+        let height = null;
+        if (options.showCameraView) {
+            // Set width/height same as camera image ratio to ensure scene align to image
+            // thus the height won't change no matter whether there's menu under scene
+            width = sceneDimension.width;
+            height = width / cameraData.imageAspectRatio;
+        } else {
+            width = sceneDimension.width;
+            height = sceneDimension.height - sceneHeightOffset;
+        }
+
         return (
             <div className="main-view" style={{ height: sceneDimension.height }}>
-                <Scene  width={sceneDimension.width}
-                        height={sceneDimension.height - sceneHeightOffset}
-                        options={options}
-                        invisible={false} />
+                <Scene
+                    width={width}
+                    height={height}
+                    options={options}
+                    invisible={false} />
                 {options.showRouteEditingBar
                     ? <RouteEditingBar />
                     : <StatusBar meters={meters}

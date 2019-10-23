@@ -1,14 +1,6 @@
 standard_planning_config {
   planner_type: PUBLIC_ROAD
   planner_public_road_config {
-     scenario_type: LANE_FOLLOW
-     scenario_type: BARE_INTERSECTION_UNPROTECTED
-     scenario_type: PULL_OVER
-     scenario_type: STOP_SIGN_UNPROTECTED
-     scenario_type: TRAFFIC_LIGHT_PROTECTED
-     scenario_type: TRAFFIC_LIGHT_UNPROTECTED_LEFT_TURN
-     scenario_type: TRAFFIC_LIGHT_UNPROTECTED_RIGHT_TURN
-     scenario_type: VALET_PARKING
   }
 }
 default_task_config: {
@@ -41,9 +33,10 @@ default_task_config: {
 default_task_config: {
   task_type: DP_ST_SPEED_OPTIMIZER
   dp_st_speed_config {
-    matrix_dimension_s: 300
-    matrix_dimension_t: 8
-
+    unit_t: 1.0
+    dense_dimension_s: 21
+    dense_unit_s: 0.25
+    sparse_unit_s: 1.0
     speed_weight: 0.0
     accel_weight: 10.0
     jerk_weight: 10.0
@@ -81,6 +74,12 @@ default_task_config: {
     search_beam_radius_intensity: 0.08
     search_range: 3.14
     is_block_angle_threshold: 0.5
+  }
+}
+default_task_config: {
+  task_type: ST_BOUNDS_DECIDER
+  st_bounds_decider_config {
+    total_time: 7.0
   }
 }
 default_task_config: {
@@ -159,6 +158,14 @@ default_task_config: {
           }
           qp_format: OSQP
           min_safety_distance: 0.01
+          osqp_config {
+            alpha: 1.0
+            eps_abs: 1.0e-3
+            eps_rel: 1.0e-3
+            max_iter: 10000
+            polish: true
+            osqp_debug_log: false
+          }
         }
         distance_approach_config {
           weight_steer: 0.3
@@ -174,6 +181,7 @@ default_task_config: {
           weight_first_order_time: 4.25
           weight_second_order_time: 13.5
           weight_end_state: 1.0
+          weight_slack: 1.0
           min_safety_distance: 0.01
           max_speed_forward: 2.0
           max_speed_reverse: 1.0
@@ -209,7 +217,7 @@ default_task_config: {
           reanchoring_trails_num: 50
           reanchoring_pos_stddev: 0.25
           reanchoring_length_stddev: 1.0
-          estimate_bound: true
+          estimate_bound: false
           default_bound: 2.0
           vehicle_shortest_dimension: 1.04
           fem_pos_deviation_smoother_config {
@@ -232,7 +240,7 @@ default_task_config: {
             ref_s_weight: 10.0
             ref_v_weight: 0.0
           }
-          collision_decrease_ratio: 0.8
+          collision_decrease_ratio: 0.0
           max_forward_v: 1.0
           max_reverse_v: 1.0
           max_forward_acc: 0.5
@@ -311,5 +319,11 @@ default_task_config: {
   task_type: LANE_CHANGE_DECIDER
   lane_change_decider_config {
     enable_lane_change_urgency_check: false
+  }
+}
+default_task_config: {
+  task_type: PATH_REUSE_DECIDER
+  path_reuse_decider_config {
+    reuse_path: false
   }
 }

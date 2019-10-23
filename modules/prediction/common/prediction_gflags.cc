@@ -25,7 +25,7 @@ DEFINE_double(prediction_trajectory_time_length, 8.0,
               "Time length of predicted trajectory (in seconds)");
 DEFINE_double(prediction_trajectory_time_resolution, 0.1,
               "Time resolution of predicted trajectory (in seconds");
-DEFINE_double(min_prediction_trajectory_spatial_length, 20.0,
+DEFINE_double(min_prediction_trajectory_spatial_length, 100.0,
               "Minimal spatial length of predicted trajectory");
 DEFINE_bool(enable_trajectory_validation_check, false,
             "If check the validity of prediction trajectory.");
@@ -53,6 +53,10 @@ DEFINE_double(pedestrian_nearby_lane_search_radius, 5.0,
               "Radius to determine if pedestrian-like obstacle is near lane.");
 DEFINE_int32(road_graph_max_search_horizon, 20,
              "Maximal search depth for building road graph");
+
+// Semantic Map
+DEFINE_double(base_image_half_range, 100.0, "The half range of base image.");
+DEFINE_bool(img_show_semantic_map, false, "If show the image of semantic map.");
 
 // Scenario
 DEFINE_double(junction_distance_threshold, 10.0,

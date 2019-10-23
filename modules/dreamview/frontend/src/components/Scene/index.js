@@ -10,7 +10,7 @@ import STORE from "store";
 export default class Scene extends React.Component {
     componentDidMount() {
         RENDERER.initialize("canvas", this.props.width, this.props.height,
-                this.props.options);
+                this.props.options, this.props.store.cameraData);
     }
 
     componentWillUpdate(nextProps) {
@@ -23,16 +23,19 @@ export default class Scene extends React.Component {
         const {invisible, options} = this.props;
 
         return (
-            <div id = "canvas"
-                 className={classNames({
-                            "dreamview-canvas" : true,
-                             "hidden" : invisible})}
-                 onMouseMove={(event) => {
-                    const geo = RENDERER.getGeolocation(event);
-                    STORE.setGeolocation(geo);
-                 }}>
-                {options.showGeo && <Geolocation />}
-            </div>
+            <React.Fragment>
+                <div id = "canvas"
+                    className={classNames({
+                                "dreamview-canvas" : true,
+                                "hidden" : invisible})}
+                    onMouseMove={(event) => {
+                        const geo = RENDERER.getGeolocation(event);
+                        STORE.setGeolocation(geo);
+                    }}>
+                    {options.showGeo && <Geolocation />}
+                </div>
+                { (options.showCameraView && !options.showRouteEditingBar) && <img id="camera-image" /> }
+            </React.Fragment>
         );
     }
 }

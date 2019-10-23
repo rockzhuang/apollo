@@ -35,9 +35,7 @@ using apollo::common::ErrorCode;
 using apollo::common::Status;
 using apollo::common::VehicleConfigHelper;
 
-PathDecider::PathDecider(const TaskConfig &config) : Task(config) {
-  SetName("PathDecider");
-}
+PathDecider::PathDecider(const TaskConfig &config) : Task(config) {}
 
 Status PathDecider::Execute(Frame *frame,
                             ReferenceLineInfo *reference_line_info) {
@@ -50,8 +48,19 @@ Status PathDecider::Process(const ReferenceLineInfo *reference_line_info,
                             const PathData &path_data,
                             PathDecision *const path_decision) {
   CHECK_NOTNULL(path_decision);
-  std::string blocking_obstacle_id =
-      reference_line_info->GetBlockingObstacleId();
+
+  // skip path_decider if reused path
+  if (FLAGS_enable_skip_path_tasks && PlanningContext::Instance()
+                                          ->mutable_planning_status()
+                                          ->mutable_path_reuse_decider()
+                                          ->reused_path()) {
+    return Status::OK();
+  }
+
+  std::string blocking_obstacle_id;
+  if (reference_line_info->GetBlockingObstacle() != nullptr) {
+    blocking_obstacle_id = reference_line_info->GetBlockingObstacle()->Id();
+  }
   if (!MakeObjectDecision(path_data, blocking_obstacle_id, path_decision)) {
     AERROR << "Failed to make decision based on tunnel";
     return Status(ErrorCode::PLANNING_ERROR, "dp_road_graph decision ");
@@ -90,13 +99,13 @@ bool PathDecider::MakeStaticObstacleDecision(
 
   // Go through every obstalce and make decisions.
   for (const auto *obstacle : path_decision->obstacles().Items()) {
-    // - skip decision making for moving vehicles or unknowns.
-    bool is_bycycle_or_pedestrain =
-        (obstacle->Perception().type() ==
-             perception::PerceptionObstacle::BICYCLE ||
-         obstacle->Perception().type() ==
-             perception::PerceptionObstacle::PEDESTRIAN);
-    if (!is_bycycle_or_pedestrain && !obstacle->IsStatic()) {
+    const std::string &obstacle_id = obstacle->Id();
+    const std::string obstacle_type_name =
+        PerceptionObstacle_Type_Name(obstacle->Perception().type());
+    ADEBUG << "obstacle_id[<< " << obstacle_id << "] type["
+           << obstacle_type_name << "]";
+
+    if (!obstacle->IsStatic() || obstacle->IsVirtual()) {
       continue;
     }
     // - skip decision making for obstacles with IGNORE/STOP decisions already.
@@ -114,7 +123,8 @@ bool PathDecider::MakeStaticObstacleDecision(
     // - add STOP decision for blocking obstacles.
     if (obstacle->Id() == blocking_obstacle_id &&
         !PlanningContext::Instance()
-             ->path_decider_info()
+             ->planning_status()
+             .path_decider()
              .is_in_path_lane_borrow_scenario()) {
       // Add stop decision
       ADEBUG << "Blocking obstacle = " << blocking_obstacle_id;
@@ -146,7 +156,7 @@ bool PathDecider::MakeStaticObstacleDecision(
     const auto frenet_point = frenet_path.GetNearestPoint(sl_boundary);
     const double curr_l = frenet_point.l();
     double min_nudge_l =
-        half_width + FLAGS_static_decision_nudge_l_buffer / 2.0;
+        half_width + FLAGS_static_obstacle_nudge_l_buffer / 2.0;
 
     if (curr_l - lateral_radius > sl_boundary.end_l() ||
         curr_l + lateral_radius < sl_boundary.start_l()) {
@@ -177,7 +187,7 @@ bool PathDecider::MakeStaticObstacleDecision(
         // LEFT_NUDGE
         ObjectNudge *object_nudge_ptr = object_decision.mutable_nudge();
         object_nudge_ptr->set_type(ObjectNudge::LEFT_NUDGE);
-        object_nudge_ptr->set_distance_l(FLAGS_nudge_distance_obstacle);
+        object_nudge_ptr->set_distance_l(FLAGS_static_obstacle_nudge_l_buffer);
         path_decision->AddLateralDecision("PathDecider/left-nudge",
                                           obstacle->Id(), object_decision);
       } else if (sl_boundary.start_l() > curr_l + min_nudge_l) {  // &&
@@ -185,7 +195,7 @@ bool PathDecider::MakeStaticObstacleDecision(
         // RIGHT_NUDGE
         ObjectNudge *object_nudge_ptr = object_decision.mutable_nudge();
         object_nudge_ptr->set_type(ObjectNudge::RIGHT_NUDGE);
-        object_nudge_ptr->set_distance_l(-FLAGS_nudge_distance_obstacle);
+        object_nudge_ptr->set_distance_l(-FLAGS_static_obstacle_nudge_l_buffer);
         path_decision->AddLateralDecision("PathDecider/right-nudge",
                                           obstacle->Id(), object_decision);
       }

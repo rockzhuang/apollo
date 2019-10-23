@@ -563,6 +563,7 @@ bool ReferenceLineProvider::CreateReferenceLine(
   bool is_new_routing = false;
   {
     // Update routing in pnc_map
+    std::lock_guard<std::mutex> lock(pnc_map_mutex_);
     if (pnc_map_->IsNewRouting(routing)) {
       is_new_routing = true;
       if (!pnc_map_->UpdateRoutingResponse(routing)) {
@@ -733,8 +734,8 @@ bool ReferenceLineProvider::Shrink(const common::SLPoint &sl,
     new_forward_distance = forward_sl.s() - sl.s();
   }
   if (need_shrink) {
-    if (!reference_line->Shrink(sl.s(), new_backward_distance,
-                                new_forward_distance)) {
+    if (!reference_line->Segment(sl.s(), new_backward_distance,
+                                 new_forward_distance)) {
       AWARN << "Failed to shrink reference line";
     }
     if (!segments->Shrink(sl.s(), new_backward_distance,

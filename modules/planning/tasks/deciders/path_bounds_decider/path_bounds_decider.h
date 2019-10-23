@@ -83,11 +83,11 @@ class PathBoundsDecider : public Decider {
    * @param lane_borrow_info: which lane to borrow.
    * @param The generated regular path_boundary, if there is one.
    * @param The blocking obstacle's id. If none, then it's not modified.
-   * @return A failure message. If succeeded, return "" (empty string).
+   * @return common::Status
    */
-  std::string GenerateRegularPathBound(
+  common::Status GenerateRegularPathBound(
       const ReferenceLineInfo& reference_line_info,
-      const LaneBorrowInfo lane_borrow_info,
+      const LaneBorrowInfo& lane_borrow_info,
       std::vector<std::tuple<double, double, double>>* const path_bound,
       std::string* const blocking_obstacle_id,
       std::string* const borrow_lane_type);
@@ -105,13 +105,17 @@ class PathBoundsDecider : public Decider {
    *   doesn't consider any lane-borrowing.
    * @param reference_line_info
    * @param The generated fallback path_boundary, if there is one.
-   * @return A failure message. If succeeded, return "" (empty string).
+   * @return common::Status
    */
-  std::string GenerateFallbackPathBound(
+  common::Status GenerateFallbackPathBound(
       const ReferenceLineInfo& reference_line_info,
       std::vector<std::tuple<double, double, double>>* const path_bound);
 
-  std::string GeneratePullOverPathBound(
+  common::Status GenerateLaneChangePathBound(
+      const ReferenceLineInfo& reference_line_info,
+      std::vector<std::tuple<double, double, double>>* const path_bound);
+
+  common::Status GeneratePullOverPathBound(
       const Frame& frame, const ReferenceLineInfo& reference_line_info,
       std::vector<std::tuple<double, double, double>>* const path_bound);
 
@@ -119,6 +123,14 @@ class PathBoundsDecider : public Decider {
       const ReferenceLineInfo& reference_line_info, const double x,
       const double y,
       const std::vector<std::tuple<double, double, double>>& path_bound);
+
+  bool FindDestinationPullOverS(
+      const Frame& frame,
+      const ReferenceLineInfo& reference_line_info,
+      const std::vector<std::tuple<double, double, double>>& path_bound,
+      double* pull_over_s);
+  bool FindEmergencyPullOverS(
+      const ReferenceLineInfo& reference_line_info, double* pull_over_s);
 
   bool SearchPullOverPosition(
       const Frame& frame, const ReferenceLineInfo& reference_line_info,
@@ -155,6 +167,26 @@ class PathBoundsDecider : public Decider {
       const ReferenceLineInfo& reference_line_info,
       std::vector<std::tuple<double, double, double>>* const path_bound);
 
+  /** @brief Refine the boundary based on the lane-info.
+   *  The returned boundary is with respect to the lane-center (NOT the
+   *  reference_line), though for most of the times reference_line's
+   *  deviation from lane-center is negligible.
+   */
+  bool GetBoundaryFromLanes(
+      const ReferenceLineInfo& reference_line_info,
+      const LaneBorrowInfo& lane_borrow_info,
+      std::vector<std::tuple<double, double, double>>* const path_bound,
+      std::string* const borrow_lane_type);
+
+  /** @brief Refine the boundary based on the ADC position and velocity.
+   *  The returned boundary is with respect to the lane-center (NOT the
+   *  reference_line), though for most of the times reference_line's
+   *  deviation from lane-center is negligible.
+   */
+  bool GetBoundaryFromADC(
+      const ReferenceLineInfo& reference_line_info, double ADC_extra_buffer,
+      std::vector<std::tuple<double, double, double>>* const path_bound);
+
   /** @brief Refine the boundary based on lane-info and ADC's location.
    *   It will comply to the lane-boundary. However, if the ADC itself
    *   is out of the given lane(s), it will adjust the boundary
@@ -162,11 +194,15 @@ class PathBoundsDecider : public Decider {
    */
   bool GetBoundaryFromLanesAndADC(
       const ReferenceLineInfo& reference_line_info,
-      const LaneBorrowInfo lane_borrow_info, double ADC_buffer,
+      const LaneBorrowInfo& lane_borrow_info, double ADC_buffer,
       std::vector<std::tuple<double, double, double>>* const path_bound,
       std::string* const borrow_lane_type);
 
-  void ConvertBoundaryAxesFromLaneCenterToRefLine(
+  void ConvertBoundarySAxisFromLaneCenterToRefLine(
+      const ReferenceLineInfo& reference_line_info,
+      std::vector<std::tuple<double, double, double>>* const path_bound);
+
+  void GetBoundaryFromLaneChangeForbiddenZone(
       const ReferenceLineInfo& reference_line_info,
       std::vector<std::tuple<double, double, double>>* const path_bound);
 
@@ -206,18 +242,30 @@ class PathBoundsDecider : public Decider {
   double GetBufferBetweenADCCenterAndEdge();
 
   /** @brief Update the path_boundary at "idx", as well as the new center-line.
-   *        It also checks if ADC is blocked (lmax < lmin).
-   * @param The current index of the path_bounds
-   * @param The minimum left boundary (l_max)
-   * @param The maximum right boundary (l_min)
-   * @param The path_boundaries (its content at idx will be updated)
-   * @param The center_line (to be updated)
-   * @return If path is good, true; if path is blocked, false.
+   *         It also checks if ADC is blocked (lmax < lmin).
+   *  @param The current index of the path_bounds
+   *  @param The minimum left boundary (l_max)
+   *  @param The maximum right boundary (l_min)
+   *  @param The path_boundaries (its content at idx will be updated)
+   *  @param The center_line (to be updated)
+   *  @return If path is good, true; if path is blocked, false.
    */
   bool UpdatePathBoundaryAndCenterLine(
       size_t idx, double left_bound, double right_bound,
       std::vector<std::tuple<double, double, double>>* const path_boundaries,
       double* const center_line);
+
+  /** @brief Update the path_boundary at "idx", It also checks if
+             ADC is blocked (lmax < lmin).
+   *  @param The current index of the path_bounds
+   *  @param The minimum left boundary (l_max)
+   *  @param The maximum right boundary (l_min)
+   *  @param The path_boundaries (its content at idx will be updated)
+   *  @return If path is good, true; if path is blocked, false.
+   */
+  bool UpdatePathBoundary(
+      size_t idx, double left_bound, double right_bound,
+      std::vector<std::tuple<double, double, double>>* const path_boundaries);
 
   /** @brief Trim the path bounds starting at the idx where path is blocked.
    */
@@ -230,6 +278,15 @@ class PathBoundsDecider : public Decider {
   void PathBoundsDebugString(
       const std::vector<std::tuple<double, double, double>>& path_boundaries);
 
+  bool CheckLaneBoundaryType(const ReferenceLineInfo& reference_line_info,
+                             const double check_s,
+                             const LaneBorrowInfo& lane_borrow_info);
+
+  void RecordDebugInfo(
+      const std::vector<std::tuple<double, double, double>>& path_boundaries,
+      const std::string& debug_name,
+      ReferenceLineInfo* const reference_line_info);
+
  private:
   double adc_frenet_s_ = 0.0;
   double adc_frenet_sd_ = 0.0;
@@ -237,6 +294,8 @@ class PathBoundsDecider : public Decider {
   double adc_frenet_ld_ = 0.0;
   double adc_l_to_lane_center_ = 0.0;
   double adc_lane_width_ = 0.0;
+  bool is_in_pull_over_scenario_ = false;
+  bool is_in_emergency_pull_over_scenario_ = false;
 
   FRIEND_TEST(PathBoundsDeciderTest, InitPathBoundary);
   FRIEND_TEST(PathBoundsDeciderTest, GetBoundaryFromLanesAndADC);

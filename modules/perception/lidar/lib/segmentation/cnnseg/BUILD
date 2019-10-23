@@ -29,8 +29,10 @@ cc_library(
         "//modules/perception/lidar/lib/segmentation/cnnseg/proto:cnnseg_param_proto",
         "//modules/perception/lidar/lib/segmentation/cnnseg/proto:spp_engine_config_proto",
         "//modules/perception/lidar/lib/segmentation/cnnseg/spp_engine",
+        "//modules/perception/lidar/lib/segmentation/ncut:ncut_segmentation",
         "//modules/perception/proto:perception_config_schema_proto",
     ],
+    alwayslink = True,
 )
 
 cc_library(

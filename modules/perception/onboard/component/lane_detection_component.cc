@@ -30,10 +30,10 @@
 #include "cyber/common/file.h"
 #include "cyber/common/log.h"
 #include "modules/common/math/math_utils.h"
+#include "modules/common/time/time.h"
 #include "modules/common/time/time_util.h"
 #include "modules/perception/common/perception_gflags.h"
 #include "modules/perception/common/sensor_manager/sensor_manager.h"
-#include "modules/perception/lib/utils/time_util.h"
 #include "modules/perception/onboard/common_flags/common_flags.h"
 #include "modules/perception/onboard/component/camera_perception_viz_message.h"
 
@@ -210,10 +210,10 @@ bool LaneDetectionComponent::Init() {
   AINFO << "velodyne128_novatel_extrinsics: " << ex_lidar2imu;
 
   CHECK(visualize_.Init_all_info_single_camera(
-      visual_camera_, intrinsic_map_, extrinsic_map_, ex_lidar2imu,
-      pitch_adj_degree, yaw_adj_degree, roll_adj_degree, image_height_,
-      image_width_));
-  homography_image2ground_ = visualize_.homography_im2car();
+      camera_names_, visual_camera_, intrinsic_map_, extrinsic_map_,
+      ex_lidar2imu, pitch_adj_degree, yaw_adj_degree, roll_adj_degree,
+      image_height_, image_width_));
+  homography_image2ground_ = visualize_.homography_im2car(visual_camera_);
   camera_lane_pipeline_->SetIm2CarHomography(homography_image2ground_);
 
   if (enable_visualization_) {
@@ -287,7 +287,7 @@ void LaneDetectionComponent::OnReceiveImage(
 
   // for e2e lantency statistics
   {
-    const double cur_time = lib::TimeUtil::GetCurrentTime();
+    const double cur_time = apollo::common::time::Clock::NowInSeconds();
     const double start_latency = (cur_time - message->measurement_time()) * 1e3;
     AINFO << "FRAME_STATISTICS:Camera:Start:msg_time[" << camera_name << "-"
           << GLOG_TIMESTAMP(message->measurement_time()) << "]:cur_time["
@@ -311,8 +311,7 @@ void LaneDetectionComponent::OnReceiveImage(
 
   // for e2e lantency statistics
   {
-    const double end_timestamp =
-        apollo::perception::lib::TimeUtil::GetCurrentTime();
+    const double end_timestamp = apollo::common::time::Clock::NowInSeconds();
     const double end_latency =
         (end_timestamp - message->measurement_time()) * 1e3;
     AINFO << "FRAME_STATISTICS:Camera:End:msg_time[" << camera_name << "-"
@@ -667,17 +666,14 @@ int LaneDetectionComponent::InternalProc(
     std::shared_ptr<base::Blob<uint8_t>> image_blob(new base::Blob<uint8_t>);
     camera_frame.data_provider->GetImageBlob(image_options, image_blob.get());
 
-    // visualize right away
-    if (camera_name == visual_camera_) {
-      cv::Mat output_image(image_height_, image_width_, CV_8UC3,
-                           cv::Scalar(0, 0, 0));
-      base::Image8U out_image(image_height_, image_width_, base::Color::RGB);
-      camera_frame.data_provider->GetImage(image_options, &out_image);
-      memcpy(output_image.data, out_image.cpu_data(),
-             out_image.total() * sizeof(uint8_t));
-      visualize_.ShowResult_all_info_single_camera(output_image, camera_frame,
-                                                   mot_buffer_, world2camera);
-    }
+    cv::Mat output_image(image_height_, image_width_, CV_8UC3,
+                         cv::Scalar(0, 0, 0));
+    base::Image8U out_image(image_height_, image_width_, base::Color::RGB);
+    camera_frame.data_provider->GetImage(image_options, &out_image);
+    memcpy(output_image.data, out_image.cpu_data(),
+           out_image.total() * sizeof(uint8_t));
+    visualize_.ShowResult_all_info_single_camera(output_image, camera_frame,
+                                                 mot_buffer_, world2camera);
   }
 
   // send out lane message
@@ -697,7 +693,10 @@ int LaneDetectionComponent::InternalProc(
 int LaneDetectionComponent::ConvertLaneToCameraLaneline(
     const base::LaneLine &lane_line,
     apollo::perception::camera::CameraLaneLine *camera_laneline) {
-  CHECK_NOTNULL(camera_laneline);
+  if (camera_laneline == nullptr) {
+    AERROR << "camera_laneline is not available";
+    return false;
+  }
   // fill the lane line attribute
   apollo::perception::camera::LaneLineType line_type =
       static_cast<apollo::perception::camera::LaneLineType>(lane_line.type);
@@ -772,7 +771,10 @@ int LaneDetectionComponent::MakeProtobufMsg(
     double msg_timestamp, const std::string &camera_name,
     const camera::CameraFrame &camera_frame,
     apollo::perception::PerceptionLanes *lanes_msg) {
-  CHECK_NOTNULL(lanes_msg);
+  if (lanes_msg == nullptr) {
+    AERROR << "lanes_msg is not available";
+    return false;
+  }
   auto itr = std::find(camera_names_.begin(), camera_names_.end(), camera_name);
   if (itr == camera_names_.end()) {
     AERROR << "invalid camera_name: " << camera_name;

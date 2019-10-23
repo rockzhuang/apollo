@@ -1,6 +1,7 @@
 import { observable, computed, action, autorun } from "mobx";
 
 import HMI from "store/hmi";
+import CameraData from "store/camera_data";
 import ControlData from "store/control_data";
 import Latency from "store/latency";
 import Meters from "store/meters";
@@ -9,6 +10,7 @@ import Options from "store/options";
 import PlanningData from "store/planning_data";
 import Playback from "store/playback";
 import RouteEditingManager from "store/route_editing_manager";
+import Teleop from "store/teleop";
 import TrafficSignal from "store/traffic_signal";
 
 class DreamviewStore {
@@ -52,6 +54,10 @@ class DreamviewStore {
 
     @observable moduleDelay = observable.map();
 
+    @observable cameraData = new CameraData();
+
+    @observable teleop = new Teleop();
+
     @observable newDisengagementReminder = false;
 
     @observable offlineViewErrorMsg = null;
@@ -70,10 +76,6 @@ class DreamviewStore {
 
     @action setInitializationStatus(status) {
         this.isInitialized = status;
-    }
-
-    @action updatePlanning(newPlanningData) {
-        this.planning.update(newPlanningData);
     }
 
     @action setGeolocation(newGeolocation) {
@@ -110,16 +112,13 @@ class DreamviewStore {
     }
 
     handleOptionToggle(option) {
-        const oldShowMonitor =
-            this.options.showPNCMonitor || this.options.showDataCollectionMonitor;
+        const oldShowMonitor = this.options.showMonitor;
         const oldShowRouteEditingBar = this.options.showRouteEditingBar;
 
         this.options.toggle(option);
 
-        // disable tools turned off after toggling
-        if (oldShowMonitor &&
-            !this.options.showPNCMonitor &&
-            !this.options.showDataCollectionMonitor) {
+        // disable tools after toggling
+        if (oldShowMonitor && !this.options.showMonitor) {
             this.disableMonitor();
         }
         if (oldShowRouteEditingBar && !this.options.showRouteEditingBar) {
@@ -127,26 +126,24 @@ class DreamviewStore {
         }
 
         // enable selected tool
-        if (this.options[option]) {
-            switch (option) {
-                case "showPNCMonitor":
-                    this.options.showDataCollectionMonitor = false;
-                    this.enableMonitor();
-                    break;
-                case 'showDataCollectionMonitor':
-                    this.options.showPNCMonitor = false;
-                    this.enableMonitor();
-                    break;
-                case 'showRouteEditingBar':
-                    this.options.showPOI = false;
-                    this.routeEditingManager.enableRouteEditing();
-                    break;
-            }
+        if (this.options.showMonitor) {
+            this.enableMonitor();
+        }
+        if (option === "showRouteEditingBar") {
+            this.options.showPOI = false;
+            this.routeEditingManager.enableRouteEditing();
         }
     }
 
     setOptionStatus(option, enabled) {
         this.options[option] = (enabled || false);
+    }
+
+    initDimension() {
+        if (this.options.showMonitor) {
+            this.enableMonitor();
+        }
+        this.updateDimension();
     }
 
     // This function is triggered automatically whenever an observable changes
