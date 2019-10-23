@@ -60,30 +60,24 @@ To test if nvidia drivers are properly installed enter `nvidia-smi` in a termina
 ```
 
 The installation steps for nvidia-docker are available at the [official repo](https://github.com/NVIDIA/nvidia-docker). 
-
-#### Pulling LGSVL Docker image
-LGSVL maintains a docker image to be used alongside this repository. The docker image is available [here](https://hub.docker.com/r/lgsvl/apollo-5.0/).
-
-To pull the image use the following command:
-
-    docker pull lgsvl/apollo-5.0
+Note: Make sure you install Docker 19.03 because with the release of Docker 19.03, usage of nvidia-docker2 packages are deprecated since NVIDIA GPUs are now natively supported as devices in the Docker runtime.
 
 ### Cloning the Repository
 This repository includes a couple of submodules for HD Maps and lgsvl msgs. To make sure that the submodules are also cloned use the following command:
 
-    git clone --recurse-submodules https://github.com/lgsvl/apollo-5.0.git
+    git clone --recurse-submodules https://github.com/rockzhuang/apollo-5.0.git
 
 
 ### Building Apollo and bridge
 Now everything should be in place to build apollo. Apollo must be built from the container. To launch the container navigate to the directory where the repository was cloned and enter:
 
-    ./docker/scripts/dev_start.sh
+    bash docker/scripts/dev_start.sh
 
 This should launch the container and mount a few volumes. It could take a few minutes to pull the latest volumes on the first run.
 
 To get into the container:
 
-    ./docker/scripts/dev_into.sh
+    bash docker/scripts/dev_into.sh
 
 Build Apollo:
 
@@ -121,7 +115,7 @@ To launch apollo, first launch and enter a container as described in the previou
     - Open the **Module Controller** tab (on the left bar).
     - Enable **Localization**, **Transform**, **Perception**, **Traffic Light**, **Planning**, **Prediction**, **Routing**.
     - Navigate to the **Route Editing** tab.
-    - Select a destination by clicking on a lane line and clicking **Submit Route**.
+    - Select a destination by clicking on a lane line and clicking **Send Routing Request**.
     - Enable **Control** in **Module Controller** tab.
     - Watch the vehicle navigate to the destination.
-    - To stop the docker container run the `dev_start.sh stop` script in `apollo/docker/scripts` in a new terminal (not in the docker container).
+    - To stop the docker container run the `bash docker/scripts/dev_start.sh stop` script in a new terminal (not in the docker container).
