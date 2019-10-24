@@ -1,5 +1,5 @@
-# LG Silicon Valley Lab Apollo 5.0 Fork
-This repository is a fork of [Apollo](https://github.com/ApolloAuto/apollo) maintained by the LG Electronics Silicon Valley Lab which has modified and configured to facilitate use with [LG's Automotive Simulator](https://github.com/lgsvl/simulator).
+# Sync ApolloAuto&LGSVL Apollo
+This repository is to sync LGSVL fork with ApolloAuto upstream, and make some modifications and examples. 
 
 **The software and source code in this repository are intended only for use with LG Automotive Simulator and *should not* be used in a real vehicle.**
 
@@ -29,43 +29,13 @@ The guide outlines the steps required to setup Apollo for use with the LG Automo
 ### Docker
 Apollo is designed to run out of docker containers. The image will mount this repository as a volume so the image will not need to be rebuilt each time a modification is made.
 
-#### Installing Docker CE
-To install Docker CE please refer to the [official documentation](https://docs.docker.com/install/linux/docker-ce/ubuntu/).
-We also suggest following through with the [post installation steps](https://docs.docker.com/install/linux/linux-postinstall/).
-
-#### Installing Nvidia Docker
-Before installing nvidia-docker make sure that you have an appropriate Nvidia driver installed.
-To test if nvidia drivers are properly installed enter `nvidia-smi` in a terminal. If the drivers are installed properly an output similar to the following should appear.
-```
-    +-----------------------------------------------------------------------------+
-    | NVIDIA-SMI 390.87                 Driver Version: 390.87                    |
-    |-------------------------------+----------------------+----------------------+
-    | GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
-    | Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
-    |===============================+======================+======================|
-    |   0  GeForce GTX 108...  Off  | 00000000:65:00.0  On |                  N/A |
-    |  0%   59C    P5    22W / 250W |   1490MiB / 11175MiB |      4%      Default |
-    +-------------------------------+----------------------+----------------------+
-                                                                                
-    +-----------------------------------------------------------------------------+
-    | Processes:                                                       GPU Memory |
-    |  GPU       PID   Type   Process name                             Usage      |
-    |=============================================================================|
-    |    0      1187      G   /usr/lib/xorg/Xorg                           863MiB |
-    |    0      3816      G   /usr/bin/gnome-shell                         305MiB |
-    |    0      4161      G   ...-token=7171B24E50C2F2C595566F55F1E4D257    68MiB |
-    |    0      4480      G   ...quest-channel-token=3330599186510203656   147MiB |
-    |    0     17936      G   ...-token=5299D28BAAD9F3087B25687A764851BB   103MiB |
-    +-----------------------------------------------------------------------------+
-```
-
-The installation steps for nvidia-docker are available at the [official repo](https://github.com/NVIDIA/nvidia-docker). 
-Note: Make sure you install Docker 19.03 because with the release of Docker 19.03, usage of nvidia-docker2 packages are deprecated since NVIDIA GPUs are now natively supported as devices in the Docker runtime.
+#### Installing Docker 19.03 or later
+Make sure to install Docker 19.03 or later because NVIDIA GPUs are natively supported as devices in the Docker runtime.
 
 ### Cloning the Repository
 This repository includes a couple of submodules for HD Maps and lgsvl msgs. To make sure that the submodules are also cloned use the following command:
 
-    git clone --recurse-submodules https://github.com/rockzhuang/apollo-5.0.git
+    git clone --recurse-submodules https://github.com/rockzhuang/apollo.git
 
 
 ### Building Apollo and bridge
