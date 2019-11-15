@@ -309,15 +309,29 @@ function main(){
 
     info "Starting docker container \"${APOLLO_DEV}\" ..."
 
+<<<<<<< HEAD
     DOCKER_CMD="docker"
     USE_GPU=1
+=======
+    DOCKER_VERSION=$(docker version --format '{{.Client.Version}}' | cut -d'.' -f1)
+
+    if [[ $DOCKER_VERSION -ge "19" ]] && ! type nvidia-docker; then
+        DOCKER_CMD="docker"
+        USE_GPU=1
+        GPUS="--gpus all"
+    else
+        DOCKER_CMD="nvidia-docker"
+        USE_GPU=1
+        GPUS=""
+    fi
+>>>>>>> lgsvl/simulator
 
     set -x
-
     ${DOCKER_CMD} run -it \
         --gpus all \
         -d \
         --privileged \
+        ${GPUS} \
         --name $APOLLO_DEV \
         ${MAP_VOLUME_CONF} \
         ${OTHER_VOLUME_CONF} \
