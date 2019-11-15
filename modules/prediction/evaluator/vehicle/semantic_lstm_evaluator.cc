@@ -19,6 +19,8 @@
 #include <omp.h>
 #include <unordered_map>
 
+#include "Eigen/Dense"
+
 #include "cyber/common/file.h"
 #include "modules/prediction/common/prediction_gflags.h"
 #include "modules/prediction/common/prediction_map.h"
@@ -39,7 +41,8 @@ SemanticLSTMEvaluator::SemanticLSTMEvaluator() : device_(torch::kCPU) {
 
 void SemanticLSTMEvaluator::Clear() {}
 
-bool SemanticLSTMEvaluator::Evaluate(Obstacle* obstacle_ptr) {
+bool SemanticLSTMEvaluator::Evaluate(Obstacle* obstacle_ptr,
+                                     ObstaclesContainer* obstacles_container) {
   omp_set_num_threads(1);
 
   obstacle_ptr->SetEvaluatorType(evaluator_type_);
@@ -122,16 +125,50 @@ bool SemanticLSTMEvaluator::Evaluate(Obstacle* obstacle_ptr) {
   trajectory->set_probability(1.0);
 
   for (int i = 0; i < 30; ++i) {
+    double prev_x = pos_x;
+    double prev_y = pos_y;
+    if (i > 0) {
+      const auto& last_point = trajectory->trajectory_point(i - 1).path_point();
+      prev_x = last_point.x();
+      prev_y = last_point.y();
+    }
     TrajectoryPoint* point = trajectory->add_trajectory_point();
     double dx = static_cast<double>(torch_output[0][i][0]);
     double dy = static_cast<double>(torch_output[0][i][1]);
+    double sigma_xr = std::abs(static_cast<double>(torch_output[0][i][2]));
+    double sigma_yr = std::abs(static_cast<double>(torch_output[0][i][3]));
+    double corr_r = static_cast<double>(torch_output[0][i][4]);
+    double heading = latest_feature_ptr->velocity_heading();
     Vec2d offset(dx, dy);
-    Vec2d rotated_offset =
-        offset.rotate(latest_feature_ptr->velocity_heading());
+    Vec2d rotated_offset = offset.rotate(heading);
     double point_x = pos_x + rotated_offset.x();
     double point_y = pos_y + rotated_offset.y();
     point->mutable_path_point()->set_x(point_x);
     point->mutable_path_point()->set_y(point_y);
+
+    Eigen::Matrix2d cov_matrix_r;
+    cov_matrix_r(0, 0) = sigma_xr * sigma_xr;
+    cov_matrix_r(0, 1) = corr_r * sigma_xr * sigma_yr;
+    cov_matrix_r(1, 0) = corr_r * sigma_xr * sigma_yr;
+    cov_matrix_r(1, 1) = sigma_yr * sigma_yr;
+
+    Eigen::Matrix2d rotation_matrix;
+    rotation_matrix(0, 0) = std::cos(heading);
+    rotation_matrix(0, 1) = -std::sin(heading);
+    rotation_matrix(1, 0) = std::sin(heading);
+    rotation_matrix(1, 1) = std::cos(heading);
+
+    Eigen::Matrix2d cov_matrix;
+    cov_matrix = rotation_matrix * cov_matrix_r * (rotation_matrix.transpose());
+    double sigma_x = std::sqrt(std::abs(cov_matrix(0, 0)));
+    double sigma_y = std::sqrt(std::abs(cov_matrix(1, 1)));
+    double corr = cov_matrix(0, 1) / (sigma_x + FLAGS_double_precision) /
+                  (sigma_y + FLAGS_double_precision);
+
+    point->mutable_gaussian_info()->set_sigma_x(sigma_x);
+    point->mutable_gaussian_info()->set_sigma_y(sigma_y);
+    point->mutable_gaussian_info()->set_correlation(corr);
+
     if (i < 10) {  // use origin heading for the first second
       point->mutable_path_point()->set_theta(
           latest_feature_ptr->velocity_heading());
@@ -144,6 +181,14 @@ bool SemanticLSTMEvaluator::Evaluate(Obstacle* obstacle_ptr) {
     }
     point->set_relative_time(static_cast<double>(i) *
                              FLAGS_prediction_trajectory_time_resolution);
+    if (i == 0) {
+      point->set_v(latest_feature_ptr->speed());
+    } else {
+      double diff_x = point_x - prev_x;
+      double diff_y = point_y - prev_y;
+      point->set_v(std::hypot(diff_x, diff_y) /
+                   FLAGS_prediction_trajectory_time_resolution);
+    }
   }
 
   return true;
@@ -173,11 +218,13 @@ void SemanticLSTMEvaluator::LoadModel() {
   if (FLAGS_use_cuda && torch::cuda::is_available()) {
     ADEBUG << "CUDA is available";
     device_ = torch::Device(torch::kCUDA);
+    torch_model_ =
+        torch::jit::load(FLAGS_torch_vehicle_semantic_lstm_file, device_);
+  } else {
+    torch_model_ =
+        torch::jit::load(FLAGS_torch_vehicle_semantic_lstm_cpu_file, device_);
   }
   torch::set_num_threads(1);
-  // TODO(Hongyi): change model file name and gflag
-  torch_model_ =
-      torch::jit::load(FLAGS_torch_vehicle_junction_map_file, device_);
 }
 
 }  // namespace prediction

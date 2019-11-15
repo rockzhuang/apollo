@@ -27,7 +27,6 @@
 #include "cyber/common/log.h"
 #include "modules/common/math/math_utils.h"
 #include "modules/common/time/time.h"
-#include "modules/common/util/string_tokenizer.h"
 #include "modules/common/util/string_util.h"
 #include "modules/common/vehicle_state/vehicle_state_provider.h"
 #include "modules/map/hdmap/hdmap.h"
@@ -134,9 +133,12 @@ Stage::StageStatus LaneFollowStage::Process(
           // under smart lane-change or IsClearToChangeLane under older version
           has_drivable_reference_line = true;
           reference_line_info.SetDrivable(true);
+          LaneChangeDecider::UpdatePreparationDistance(true, frame,
+                                                       &reference_line_info);
           ADEBUG << "\tclear for lane change";
         } else {
-          LaneChangeDecider::UpdateStatus(false, &reference_line_info);
+          LaneChangeDecider::UpdatePreparationDistance(false, frame,
+                                                       &reference_line_info);
           reference_line_info.SetDrivable(false);
           ADEBUG << "\tlane change failed";
         }
@@ -293,7 +295,7 @@ void LaneFollowStage::PlanFallbackTrajectory(
 
   const double curr_speed_distance =
       FLAGS_fallback_total_time *
-      std::min({FLAGS_default_cruise_speed,
+      std::min({reference_line_info->GetCruiseSpeed(),
                 reference_line_info->vehicle_state().linear_velocity()});
 
   *reference_line_info->mutable_speed_data() =

@@ -43,7 +43,6 @@ void ADCTrajectoryContainer::Insert(
   adc_target_lane_seq_.clear();
   adc_junction_polygon_ = std::move(Polygon2d());
 
-  std::lock_guard<std::mutex> lock(adc_trajectory_mutex_);
   adc_trajectory_.CopyFrom(dynamic_cast<const ADCTrajectory&>(message));
   ADEBUG << "Received a planning message ["
          << adc_trajectory_.ShortDebugString() << "].";
@@ -227,8 +226,8 @@ void ADCTrajectoryContainer::SetLaneSequence() {
 void ADCTrajectoryContainer::SetTargetLaneSequence() {
   for (const auto& lane : adc_trajectory_.target_lane_id()) {
     if (!lane.id().empty()) {
-      if (adc_target_lane_seq_.empty() || lane.id() !=
-          adc_target_lane_seq_.back()) {
+      if (adc_target_lane_seq_.empty() ||
+          lane.id() != adc_target_lane_seq_.back()) {
         adc_target_lane_seq_.emplace_back(lane.id());
       }
     }
@@ -266,7 +265,8 @@ std::string ADCTrajectoryContainer::ToString(
   return str_lane_sequence;
 }
 
-bool ADCTrajectoryContainer::HasOverlap(const LaneSequence& lane_sequence) {
+bool ADCTrajectoryContainer::HasOverlap(
+    const LaneSequence& lane_sequence) const {
   for (const auto& lane_segment : lane_sequence.lane_segment()) {
     std::string lane_id = lane_segment.lane_id();
     if (adc_lane_ids_.find(lane_id) != adc_lane_ids_.end()) {

@@ -25,6 +25,7 @@
 #include "modules/common/configs/vehicle_config_helper.h"
 #include "modules/planning/common/planning_gflags.h"
 #include "modules/planning/common/speed/st_point.h"
+#include "modules/planning/tasks/utils/st_gap_estimator.h"
 
 namespace apollo {
 namespace planning {
@@ -35,9 +36,11 @@ constexpr double kInf = std::numeric_limits<double>::infinity();
 DpStCost::DpStCost(const DpStSpeedConfig& config, const double total_t,
                    const double total_s,
                    const std::vector<const Obstacle*>& obstacles,
+                   const STDrivableBoundary& st_drivable_boundary,
                    const common::TrajectoryPoint& init_point)
     : config_(config),
       obstacles_(obstacles),
+      st_drivable_boundary_(st_drivable_boundary),
       init_point_(init_point),
       unit_t_(config.unit_t()),
       total_s_(total_s) {
@@ -112,6 +115,22 @@ double DpStCost::GetObstacleCost(const StGraphPoint& st_graph_point) {
   const double t = st_graph_point.point().t();
 
   double cost = 0.0;
+
+  if (FLAGS_use_st_drivable_boundary) {
+    // TODO(Jiancheng): move to configs
+    constexpr double boundary_resolution = 0.1;
+    int index = static_cast<int>(t / boundary_resolution);
+    const double lower_bound =
+        st_drivable_boundary_.st_boundary(index).s_lower();
+    const double upper_bound =
+        st_drivable_boundary_.st_boundary(index).s_upper();
+
+    if (s > upper_bound || s < lower_bound) {
+      return kInf;
+    }
+    return cost * unit_t_;
+  }
+
   for (const auto* obstacle : obstacles_) {
     // Not applying obstacle approaching cost to virtual obstacle
     if (obstacle->IsVirtual()) {
@@ -142,9 +161,10 @@ double DpStCost::GetObstacleCost(const StGraphPoint& st_graph_point) {
       s_lower = boundary_cost_[boundary_index][st_graph_point.index_t()].second;
     }
     if (s < s_lower) {
-      // TODO(all): merge this parameter with existing parameter
       const double follow_distance_s =
-          obstacle->speed() * config_.safe_time_buffer();
+          config_.is_lane_changing()
+              ? config_.safe_distance()
+              : StGapEstimator::EstimateSafeFollowingGap(obstacle->speed());
       if (s + follow_distance_s < s_lower) {
         continue;
       } else {
@@ -153,11 +173,12 @@ double DpStCost::GetObstacleCost(const StGraphPoint& st_graph_point) {
                 s_diff * s_diff;
       }
     } else if (s > s_upper) {
-      if (s >
-          s_upper + config_.safe_distance()) {  // or calculated from velocity
+      const double overtake_distance_s =
+          StGapEstimator::EstimateSafeOvertakingGap();
+      if (s > s_upper + overtake_distance_s) {  // or calculated from velocity
         continue;
       } else {
-        auto s_diff = config_.safe_distance() + s_upper - s;
+        auto s_diff = overtake_distance_s + s_upper - s;
         cost += config_.obstacle_weight() * config_.default_obstacle_cost() *
                 s_diff * s_diff;
       }
@@ -177,7 +198,8 @@ double DpStCost::GetReferenceCost(const STPoint& point,
 }
 
 double DpStCost::GetSpeedCost(const STPoint& first, const STPoint& second,
-                              const double speed_limit) const {
+                              const double speed_limit,
+                              const double cruise_speed) const {
   double cost = 0.0;
   const double speed = (second.s() - first.s()) / unit_t_;
   if (speed < 0) {
@@ -204,7 +226,7 @@ double DpStCost::GetSpeedCost(const STPoint& first, const STPoint& second,
   }
 
   if (FLAGS_enable_dp_reference_speed) {
-    double diff_speed = speed - FLAGS_default_cruise_speed;
+    double diff_speed = speed - cruise_speed;
     cost += config_.reference_speed_penalty() * config_.default_speed_cost() *
             fabs(diff_speed) * unit_t_;
   }

@@ -87,7 +87,7 @@ class ScenarioManager final {
   void UpdatePlanningContextBareIntersectionScenario(
       const Frame& frame, const ScenarioConfig::ScenarioType& scenario_type);
 
-  void UpdatePlanningContextEmergencyPullOverScenario(
+  void UpdatePlanningContextEmergencyStopcenario(
       const Frame& frame, const ScenarioConfig::ScenarioType& scenario_type);
 
   void UpdatePlanningContextPullOverScenario(
@@ -102,9 +102,7 @@ class ScenarioManager final {
   void UpdatePlanningContextYieldSignScenario(
       const Frame& frame, const ScenarioConfig::ScenarioType& scenario_type);
 
-
  private:
-  static bool emergency_vehicle_alert_;
   std::unordered_map<ScenarioConfig::ScenarioType, ScenarioConfig,
                      std::hash<int>>
       config_map_;

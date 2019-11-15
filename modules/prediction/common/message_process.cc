@@ -31,6 +31,7 @@
 #include "modules/prediction/common/prediction_gflags.h"
 #include "modules/prediction/common/prediction_system_gflags.h"
 #include "modules/prediction/common/validation_checker.h"
+#include "modules/prediction/container/storytelling/storytelling_container.h"
 #include "modules/prediction/evaluator/evaluator_manager.h"
 #include "modules/prediction/predictor/predictor_manager.h"
 #include "modules/prediction/proto/offline_features.pb.h"
@@ -132,6 +133,12 @@ void MessageProcess::ContainerProcess(
           AdapterConfig::PLANNING_TRAJECTORY);
   CHECK_NOTNULL(ptr_ego_trajectory_container);
 
+  // Get storytelling_container
+  auto ptr_storytelling_container =
+      ContainerManager::Instance()->GetContainer<StoryTellingContainer>(
+          AdapterConfig::STORYTELLING);
+  CHECK_NOTNULL(ptr_storytelling_container);
+
   // Insert ADC into the obstacle_container.
   const PerceptionObstacle* ptr_ego_vehicle =
       ptr_ego_pose_container->ToPerceptionObstacle();
@@ -156,17 +163,6 @@ void MessageProcess::ContainerProcess(
 
   // Insert perception_obstacles
   ptr_obstacles_container->Insert(perception_obstacles);
-}
-
-void MessageProcess::OnPerception(
-    const perception::PerceptionObstacles& perception_obstacles,
-    PredictionObstacles* const prediction_obstacles) {
-  ContainerProcess(perception_obstacles);
-
-  auto ptr_obstacles_container =
-      ContainerManager::Instance()->GetContainer<ObstaclesContainer>(
-          AdapterConfig::PERCEPTION_OBSTACLES);
-  CHECK_NOTNULL(ptr_obstacles_container);
 
   // Ignore some obstacles
   ObstaclesPrioritizer::Instance()->AssignIgnoreLevel();
@@ -185,10 +181,26 @@ void MessageProcess::OnPerception(
   ptr_obstacles_container->BuildLaneGraph();
 
   // Assign CautionLevel for obstacles
-  ObstaclesPrioritizer::Instance()->AssignCautionLevel();
+  ObstaclesPrioritizer::Instance()->AssignCautionLevel(scenario);
 
   // Analyze RightOfWay for the caution obstacles
   RightOfWay::Analyze();
+}
+
+void MessageProcess::OnPerception(
+    const perception::PerceptionObstacles& perception_obstacles,
+    PredictionObstacles* const prediction_obstacles) {
+  ContainerProcess(perception_obstacles);
+
+  auto ptr_obstacles_container =
+      ContainerManager::Instance()->GetContainer<ObstaclesContainer>(
+          AdapterConfig::PERCEPTION_OBSTACLES);
+  CHECK_NOTNULL(ptr_obstacles_container);
+
+  auto ptr_ego_trajectory_container =
+      ContainerManager::Instance()->GetContainer<ADCTrajectoryContainer>(
+          AdapterConfig::PLANNING_TRAJECTORY);
+  CHECK_NOTNULL(ptr_ego_trajectory_container);
 
   // Insert features to FeatureOutput for offline_mode
   if (FLAGS_prediction_offline_mode == PredictionConstants::kDumpFeatureProto) {
@@ -217,14 +229,15 @@ void MessageProcess::OnPerception(
   }
 
   // Make evaluations
-  EvaluatorManager::Instance()->Run();
+  EvaluatorManager::Instance()->Run(ptr_obstacles_container);
   if (FLAGS_prediction_offline_mode ==
           PredictionConstants::kDumpDataForLearning ||
       FLAGS_prediction_offline_mode == PredictionConstants::kDumpFrameEnv) {
     return;
   }
   // Make predictions
-  PredictorManager::Instance()->Run();
+  PredictorManager::Instance()->Run(ptr_ego_trajectory_container,
+                                    ptr_obstacles_container);
 
   // Get predicted obstacles
   *prediction_obstacles = PredictorManager::Instance()->prediction_obstacles();

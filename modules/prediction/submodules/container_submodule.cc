@@ -14,6 +14,8 @@
  * limitations under the License.
  *****************************************************************************/
 
+#include <utility>
+
 #include "modules/prediction/submodules/container_submodule.h"
 
 #include "modules/common/adapters/adapter_gflags.h"
@@ -22,7 +24,6 @@
 #include "modules/prediction/common/message_process.h"
 #include "modules/prediction/common/prediction_system_gflags.h"
 #include "modules/prediction/container/container_manager.h"
-#include "modules/prediction/container/obstacles/obstacles_container.h"
 
 namespace apollo {
 namespace prediction {
@@ -52,21 +53,44 @@ bool ContainerSubmodule::Init() {
       node_->CreateReader<localization::LocalizationEstimate>(
           FLAGS_localization_topic, nullptr);
 
+  storytelling_reader_ = node_->CreateReader<storytelling::Stories>(
+      FLAGS_storytelling_topic, nullptr);
+
   // TODO(kechxu) change topic name when finalized
-  prediction_writer_ =
-      node_->CreateWriter<PredictionObstacles>(FLAGS_prediction_topic);
+  container_writer_ =
+      node_->CreateWriter<ContainerOutput>(FLAGS_prediction_topic);
+
+  adc_container_writer_ =
+      node_->CreateWriter<ADCTrajectoryContainer>(FLAGS_prediction_topic);
+
   return true;
 }
 
 bool ContainerSubmodule::Proc(
     const std::shared_ptr<PerceptionObstacles>& perception_message) {
   MessageProcess::ContainerProcess(*perception_message);
-
+  const double frame_start_time = Clock::NowInSeconds();
   auto obstacles_container_ptr =
       ContainerManager::Instance()->GetContainer<ObstaclesContainer>(
           AdapterConfig::PERCEPTION_OBSTACLES);
   CHECK_NOTNULL(obstacles_container_ptr);
-  // TODO(kechxu): implement the writer
+
+  auto adc_trajectory_container_ptr =
+      ContainerManager::Instance()->GetContainer<ADCTrajectoryContainer>(
+          AdapterConfig::PLANNING_TRAJECTORY);
+  CHECK_NOTNULL(adc_trajectory_container_ptr);
+
+  SubmoduleOutput submodule_output =
+      obstacles_container_ptr->GetSubmoduleOutput();
+  submodule_output.set_perception_header(perception_message->header());
+  submodule_output.set_perception_error_code(perception_message->error_code());
+  submodule_output.set_frame_start_time(frame_start_time);
+  ContainerOutput container_output(std::move(submodule_output));
+  container_writer_->Write(std::make_shared<ContainerOutput>(container_output));
+
+  adc_container_writer_->Write(
+      std::shared_ptr<ADCTrajectoryContainer>(adc_trajectory_container_ptr));
+
   return true;
 }
 

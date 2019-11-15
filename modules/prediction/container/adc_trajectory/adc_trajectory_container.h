@@ -69,7 +69,7 @@ class ADCTrajectoryContainer : public Container {
    * @brief Has overlap with ADC trajectory
    * @return True if a target lane sequence has overlap with ADC trajectory
    */
-  bool HasOverlap(const LaneSequence& lane_sequence);
+  bool HasOverlap(const LaneSequence& lane_sequence) const;
 
   /**
    * @brief Set ADC position
@@ -145,7 +145,6 @@ class ADCTrajectoryContainer : public Container {
   std::vector<std::string> adc_lane_seq_;
   std::unordered_set<std::string> adc_target_lane_ids_;
   std::vector<std::string> adc_target_lane_seq_;
-  std::mutex adc_trajectory_mutex_;
 };
 
 }  // namespace prediction

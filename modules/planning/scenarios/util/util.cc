@@ -84,7 +84,7 @@ PullOverStatus CheckADCPullOver(const ReferenceLineInfo& reference_line_info,
                                 const ScenarioPullOverConfig& scenario_config) {
   const auto& pull_over_status =
       PlanningContext::Instance()->planning_status().pull_over();
-  if (!pull_over_status.is_feasible() || !pull_over_status.has_position() ||
+  if (!pull_over_status.has_position() ||
       !pull_over_status.position().has_x() ||
       !pull_over_status.position().has_y() || !pull_over_status.has_theta()) {
     ADEBUG << "pull_over status not set properly: "
@@ -145,7 +145,7 @@ PullOverStatus CheckADCPullOverPathPoint(
     const common::PathPoint& path_point) {
   const auto& pull_over_status =
       PlanningContext::Instance()->planning_status().pull_over();
-  if (!pull_over_status.is_feasible() || !pull_over_status.has_position() ||
+  if (!pull_over_status.has_position() ||
       !pull_over_status.position().has_x() ||
       !pull_over_status.position().has_y() || !pull_over_status.has_theta()) {
     ADEBUG << "pull_over status not set properly: "
@@ -167,7 +167,7 @@ PullOverStatus CheckADCPullOverOpenSpace(
     const ScenarioPullOverConfig& scenario_config) {
   const auto& pull_over_status =
       PlanningContext::Instance()->planning_status().pull_over();
-  if (!pull_over_status.is_feasible() || !pull_over_status.has_position() ||
+  if (!pull_over_status.has_position() ||
       !pull_over_status.position().has_x() ||
       !pull_over_status.position().has_y() || !pull_over_status.has_theta()) {
     ADEBUG << "pull_over status not set properly: "
@@ -254,7 +254,10 @@ bool CheckADCReadyToCruise(Frame* frame,
   ADEBUG << "is_near_front_obstacle: " << is_near_front_obstacle;
   ADEBUG << "heading_align_w_reference_line: "
          << heading_align_w_reference_line;
-  if (!is_near_front_obstacle && heading_align_w_reference_line) {
+  // check gear status
+  if ((common::VehicleStateProvider::Instance()->gear() ==
+       canbus::Chassis::GEAR_DRIVE) &&
+      !is_near_front_obstacle && heading_align_w_reference_line) {
     return true;
   }
   return false;
@@ -284,7 +287,9 @@ bool CheckADCSurroundObstacles(const common::math::Vec2d adc_position,
   auto obstacles = frame->obstacles();
   for (const auto& obstacle : obstacles) {
     const auto& obstacle_polygon = obstacle->PerceptionPolygon();
-    if (adc_polygon.HasOverlap(obstacle_polygon)) {
+    const Polygon2d& nudge_polygon = obstacle_polygon.ExpandByDistance(
+        std::fabs(FLAGS_static_obstacle_nudge_l_buffer));
+    if (adc_polygon.HasOverlap(nudge_polygon)) {
       ADEBUG << "blocked obstacle: " << obstacle->Id();
       return true;
     }
@@ -300,6 +305,7 @@ bool CheckADCHeading(const common::math::Vec2d adc_position,
                      const double adc_heading,
                      const ReferenceLineInfo& reference_line_info,
                      const double heading_diff_to_reference_line) {
+  const double kReducedHeadingBuffer = 0.3;  // (rad) TODO(Shu) move to config
   const auto& reference_line = reference_line_info.reference_line();
   common::SLPoint adc_position_sl;
   reference_line.XYToSL(adc_position, &adc_position_sl);
@@ -307,8 +313,13 @@ bool CheckADCHeading(const common::math::Vec2d adc_position,
   const auto reference_point =
       reference_line.GetReferencePoint(adc_position_sl.s());
   const auto path_point = reference_point.ToPathPoint(adc_position_sl.s());
-  if (std::fabs(common::math::NormalizeAngle(
-          adc_heading - path_point.theta())) < heading_diff_to_reference_line) {
+  AINFO << "heading difference: "
+        << common::math::NormalizeAngle(adc_heading - path_point.theta());
+  double angle_difference =
+      common::math::NormalizeAngle(adc_heading - path_point.theta());
+  if (angle_difference >
+          -1.0 * (heading_diff_to_reference_line - kReducedHeadingBuffer) &&
+      angle_difference < heading_diff_to_reference_line) {
     return true;
   }
   return false;

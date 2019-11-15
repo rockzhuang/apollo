@@ -30,8 +30,9 @@
 #include "modules/planning/common/planning_gflags.h"
 #include "modules/planning/common/util/util.h"
 #include "modules/planning/scenarios/bare_intersection/unprotected/bare_intersection_unprotected_scenario.h"
+#include "modules/planning/scenarios/emergency/emergency_pull_over/emergency_pull_over_scenario.h"
+#include "modules/planning/scenarios/emergency/emergency_stop/emergency_stop_scenario.h"
 #include "modules/planning/scenarios/lane_follow/lane_follow_scenario.h"
-#include "modules/planning/scenarios/park/emergency_pull_over/emergency_pull_over_scenario.h"
 #include "modules/planning/scenarios/park/pull_over/pull_over_scenario.h"
 #include "modules/planning/scenarios/park/valet_parking/valet_parking_scenario.h"
 #include "modules/planning/scenarios/park_and_go/park_and_go_scenario.h"
@@ -49,8 +50,6 @@ namespace scenario {
 using apollo::common::VehicleState;
 using apollo::hdmap::HDMapUtil;
 using apollo::hdmap::PathOverlap;
-
-bool ScenarioManager::emergency_vehicle_alert_ = false;
 
 bool ScenarioManager::Init() {
   RegisterScenarios();
@@ -71,6 +70,10 @@ std::unique_ptr<Scenario> ScenarioManager::CreateScenario(
       break;
     case ScenarioConfig::EMERGENCY_PULL_OVER:
       ptr.reset(new emergency_pull_over::EmergencyPullOverScenario(
+          config_map_[scenario_type], &scenario_context_));
+      break;
+    case ScenarioConfig::EMERGENCY_STOP:
+      ptr.reset(new emergency_stop::EmergencyStopScenario(
           config_map_[scenario_type], &scenario_context_));
       break;
     case ScenarioConfig::LANE_FOLLOW:
@@ -135,6 +138,10 @@ void ScenarioManager::RegisterScenarios() {
   CHECK(
       Scenario::LoadConfig(FLAGS_scenario_emergency_pull_over_config_file,
                            &config_map_[ScenarioConfig::EMERGENCY_PULL_OVER]));
+
+  // emergency_stop
+  CHECK(Scenario::LoadConfig(FLAGS_scenario_emergency_stop_config_file,
+                             &config_map_[ScenarioConfig::EMERGENCY_STOP]));
 
   // park_and_go
   CHECK(Scenario::LoadConfig(FLAGS_scenario_park_and_go_config_file,
@@ -211,7 +218,7 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectPullOverScenario(
     const auto& pull_over_status =
         PlanningContext::Instance()->planning_status().pull_over();
     if (adc_distance_to_dest < scenario_config.max_distance_stop_search() &&
-        !pull_over_status.is_feasible()) {
+        !pull_over_status.has_position()) {
       pull_over_scenario = false;
     }
   }
@@ -322,13 +329,15 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectPadMsgScenario(
       }
       break;
     case DrivingAction::STOP:
-      // TODO(all): to be added
-      //  if (FLAGS_) {
-      //    return ScenarioConfig::STOP_EMERGENCY;
-      //  }
+      if (FLAGS_enable_scenario_emergency_stop) {
+        return ScenarioConfig::EMERGENCY_STOP;
+      }
       break;
-    case DrivingAction::RESTART_CRUISE:
-      if (FLAGS_enable_scenario_park_and_go) {
+    case DrivingAction::RESUME_CRUISE:
+      if (current_scenario_->scenario_type() ==
+              ScenarioConfig::EMERGENCY_PULL_OVER ||
+          current_scenario_->scenario_type() ==
+              ScenarioConfig::EMERGENCY_STOP) {
         return ScenarioConfig::PARK_AND_GO;
       }
       break;
@@ -462,10 +471,17 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectStopSignScenario(
 
 ScenarioConfig::ScenarioType ScenarioManager::SelectTrafficLightScenario(
     const Frame& frame, const hdmap::PathOverlap& traffic_light_overlap) {
-  // scenario conf is the same across all traffic-light scenarios
-  const auto& scenario_config =
-      config_map_[ScenarioConfig::TRAFFIC_LIGHT_PROTECTED]
-          .traffic_light_unprotected_right_turn_config();
+  // some scenario may need start sooner than the others
+  const double start_check_distance = std::max(
+      {config_map_[ScenarioConfig::TRAFFIC_LIGHT_PROTECTED]
+           .traffic_light_protected_config()
+           .start_traffic_light_scenario_distance(),
+       config_map_[ScenarioConfig::TRAFFIC_LIGHT_UNPROTECTED_LEFT_TURN]
+           .traffic_light_unprotected_left_turn_config()
+           .start_traffic_light_scenario_distance(),
+       config_map_[ScenarioConfig::TRAFFIC_LIGHT_UNPROTECTED_RIGHT_TURN]
+           .traffic_light_unprotected_right_turn_config()
+           .start_traffic_light_scenario_distance()});
 
   const auto& reference_line_info = frame.reference_line_info().front();
   const double adc_front_edge_s = reference_line_info.AdcSlBoundary().end_s();
@@ -497,20 +513,62 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectTrafficLightScenario(
            << adc_distance_to_traffic_light << "]";
 
     // enter traffic-light scenarios: based on distance only
-    if (adc_distance_to_traffic_light > 0.0 &&
-        adc_distance_to_traffic_light <=
-            scenario_config.start_traffic_light_scenario_distance()) {
-      traffic_light_scenario = true;
+    if (adc_distance_to_traffic_light <= 0.0 ||
+        adc_distance_to_traffic_light > start_check_distance) {
+      continue;
+    }
 
-      const auto& signal_color =
-          frame.GetSignal(traffic_light_overlap.object_id).color();
-      ADEBUG << "traffic_light_id[" << traffic_light_overlap.object_id
-             << "] start_s[" << traffic_light_overlap.start_s << "] color["
-             << signal_color << "]";
+    traffic_light_scenario = true;
 
-      if (signal_color != perception::TrafficLight::GREEN) {
-        red_light = true;
-        break;
+    const auto& signal_color =
+        frame.GetSignal(traffic_light_overlap.object_id).color();
+    ADEBUG << "traffic_light_id[" << traffic_light_overlap.object_id
+           << "] start_s[" << traffic_light_overlap.start_s << "] color["
+           << signal_color << "]";
+
+    if (signal_color != perception::TrafficLight::GREEN) {
+      red_light = true;
+      break;
+    }
+  }
+
+  bool traffic_light_protected_scenario = false;
+  bool traffic_light_unprotected_left_turn_scenario = false;
+  bool traffic_light_unprotected_right_turn_scenario = false;
+  if (traffic_light_scenario) {
+    const auto& turn_type =
+        reference_line_info.GetPathTurnType(traffic_light_overlap.start_s);
+    const bool right_turn = (turn_type == hdmap::Lane::RIGHT_TURN);
+    const bool left_turn = (turn_type == hdmap::Lane::LEFT_TURN);
+    const double adc_distance_to_traffic_light =
+        traffic_light_overlap.start_s - adc_front_edge_s;
+
+    if (right_turn && red_light) {
+      // check TRAFFIC_LIGHT_UNPROTECTED_RIGHT_TURN
+      const auto& scenario_config =
+          config_map_[ScenarioConfig::TRAFFIC_LIGHT_UNPROTECTED_RIGHT_TURN]
+              .traffic_light_unprotected_right_turn_config();
+      if (adc_distance_to_traffic_light <
+          scenario_config.start_traffic_light_scenario_distance()) {
+        traffic_light_unprotected_right_turn_scenario = true;
+      }
+    } else if (left_turn) {
+      // check TRAFFIC_LIGHT_UNPROTECTED_LEFT_TURN
+      const auto& scenario_config =
+          config_map_[ScenarioConfig::TRAFFIC_LIGHT_UNPROTECTED_LEFT_TURN]
+              .traffic_light_unprotected_left_turn_config();
+      if (adc_distance_to_traffic_light <
+          scenario_config.start_traffic_light_scenario_distance()) {
+        traffic_light_unprotected_left_turn_scenario = true;
+      }
+    } else {
+      // check TRAFFIC_LIGHT_PROTECTED
+      const auto& scenario_config =
+          config_map_[ScenarioConfig::TRAFFIC_LIGHT_PROTECTED]
+              .traffic_light_protected_config();
+      if (adc_distance_to_traffic_light <
+          scenario_config.start_traffic_light_scenario_distance()) {
+        traffic_light_protected_scenario = true;
       }
     }
   }
@@ -520,19 +578,11 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectTrafficLightScenario(
     case ScenarioConfig::CHANGE_LANE:
     case ScenarioConfig::PARK_AND_GO:
     case ScenarioConfig::PULL_OVER:
-      if (traffic_light_scenario) {
-        const auto& turn_type =
-            reference_line_info.GetPathTurnType(traffic_light_overlap.start_s);
-        const bool right_turn = (turn_type == hdmap::Lane::RIGHT_TURN);
-        const bool left_turn = (turn_type == hdmap::Lane::LEFT_TURN);
-
-        if (right_turn && red_light) {
-          return ScenarioConfig::TRAFFIC_LIGHT_UNPROTECTED_RIGHT_TURN;
-        }
-        if (left_turn) {
-          return ScenarioConfig::TRAFFIC_LIGHT_UNPROTECTED_LEFT_TURN;
-        }
-
+      if (traffic_light_unprotected_left_turn_scenario) {
+        return ScenarioConfig::TRAFFIC_LIGHT_UNPROTECTED_LEFT_TURN;
+      } else if (traffic_light_unprotected_right_turn_scenario) {
+        return ScenarioConfig::TRAFFIC_LIGHT_UNPROTECTED_RIGHT_TURN;
+      } else if (traffic_light_protected_scenario) {
         return ScenarioConfig::TRAFFIC_LIGHT_PROTECTED;
       }
       break;
@@ -869,10 +919,10 @@ void ScenarioManager::UpdatePlanningContext(
   // BareIntersection scenario
   UpdatePlanningContextBareIntersectionScenario(frame, scenario_type);
 
-  // EmergencyPullOver scenario
-  UpdatePlanningContextEmergencyPullOverScenario(frame, scenario_type);
+  // EmergencyStop scenario
+  UpdatePlanningContextEmergencyStopcenario(frame, scenario_type);
 
-  // PullOver scenario
+  // PullOver & EmergencyPullOver scenarios
   UpdatePlanningContextPullOverScenario(frame, scenario_type);
 
   // StopSign scenario
@@ -910,6 +960,17 @@ void ScenarioManager::UpdatePlanningContextBareIntersectionScenario(
     ADEBUG << "Update PlanningContext with first_encountered pnc_junction["
            << map_itr->second.object_id << "] start_s["
            << map_itr->second.start_s << "]";
+  }
+}
+
+// update: emergency_stop status in PlanningContext
+void ScenarioManager::UpdatePlanningContextEmergencyStopcenario(
+    const Frame& frame, const ScenarioConfig::ScenarioType& scenario_type) {
+  auto* emergency_stop = PlanningContext::Instance()
+                             ->mutable_planning_status()
+                             ->mutable_emergency_stop();
+  if (!scenario_type == ScenarioConfig::EMERGENCY_STOP) {
+    emergency_stop->Clear();
   }
 }
 
@@ -1078,18 +1139,22 @@ void ScenarioManager::UpdatePlanningContextYieldSignScenario(
 // update: pull_over status in PlanningContext
 void ScenarioManager::UpdatePlanningContextPullOverScenario(
     const Frame& frame, const ScenarioConfig::ScenarioType& scenario_type) {
+  auto* pull_over = PlanningContext::Instance()
+                        ->mutable_planning_status()
+                        ->mutable_pull_over();
   if (scenario_type == ScenarioConfig::PULL_OVER) {
-    PlanningContext::Instance()
-        ->mutable_planning_status()
-        ->mutable_pull_over()
-        ->set_is_in_pull_over_scenario(true);
+    pull_over->set_pull_over_type(PullOverStatus::PULL_OVER);
+    pull_over->set_plan_pull_over_path(true);
+    return;
+  } else if (scenario_type == ScenarioConfig::EMERGENCY_PULL_OVER) {
+    pull_over->set_pull_over_type(PullOverStatus::EMERGENCY_PULL_OVER);
     return;
   }
-  PlanningContext::Instance()
-      ->mutable_planning_status()
-      ->mutable_pull_over()
-      ->set_is_in_pull_over_scenario(false);
 
+  pull_over->set_plan_pull_over_path(false);
+
+  // check pull_over_status left behind
+  // keep it if close to destination, to keep stop fence
   const auto& pull_over_status =
       PlanningContext::Instance()->planning_status().pull_over();
   if (pull_over_status.has_position() && pull_over_status.position().has_x() &&
@@ -1119,21 +1184,6 @@ void ScenarioManager::UpdatePlanningContextPullOverScenario(
       }
     }
   }
-}
-
-// update: emergency_pull_over status in PlanningContext
-void ScenarioManager::UpdatePlanningContextEmergencyPullOverScenario(
-    const Frame& frame, const ScenarioConfig::ScenarioType& scenario_type) {
-  auto* emergency_pull_over = PlanningContext::Instance()
-                                ->mutable_planning_status()
-                                ->mutable_emergency_pull_over();
-
-  if (scenario_type != ScenarioConfig::EMERGENCY_PULL_OVER) {
-    emergency_pull_over->Clear();
-    return;
-  }
-
-  emergency_pull_over->set_is_in_emergency_pull_over_scenario(true);
 }
 
 }  // namespace scenario
