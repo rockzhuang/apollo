@@ -38,11 +38,20 @@ export default class PlanningMonitor extends React.Component {
             return null;
         }
 
+        const chartCount = {};
+
         return (
             <div>
                 <PlanningScenarioTable scenarios={scenarioHistory} />
                 {chartData.map(chart => {
-                    return <ScatterGraph key={chart.title}
+                    // Adding count to chart key to prevent duplicate chart title
+                    if (!chartCount[chart.title]) {
+                        chartCount[chart.title] = 1;
+                    } else {
+                        chartCount[chart.title] += 1;
+                    }
+
+                    return <ScatterGraph key={`custom_${chart.title}_${chartCount[chart.title]}`}
                                          title={chart.title}
                                          options={chart.options}
                                          properties={chart.properties}

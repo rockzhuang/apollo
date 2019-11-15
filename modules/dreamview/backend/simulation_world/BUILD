@@ -4,12 +4,8 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "simulation_world_service",
-    srcs = [
-        "simulation_world_service.cc",
-    ],
-    hdrs = [
-        "simulation_world_service.h",
-    ],
+    srcs = ["simulation_world_service.cc"],
+    hdrs = ["simulation_world_service.h"],
     copts = ['-DMODULE_NAME=\\"dreamview\\"'],
     deps = [
         "//cyber",
@@ -33,7 +29,9 @@ cc_library(
         "//modules/perception/proto:perception_proto",
         "//modules/planning/proto:planning_proto",
         "//modules/prediction/proto:prediction_proto",
+        "//modules/storytelling/proto:story_proto",
         "//third_party/json",
+        "@com_google_absl//absl/strings",
     ],
 )
 

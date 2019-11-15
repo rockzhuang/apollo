@@ -21,7 +21,7 @@ FAST_BUILD_MODE="no"
 FAST_TEST_MODE="no"
 VERSION=""
 ARCH=$(uname -m)
-VERSION_X86_64="dev-18.04-x86_64-20191010_1250"
+VERSION_X86_64="dev-18.04-x86_64-20191111_1530"
 VERSION_AARCH64="dev-aarch64-20170927_1111"
 VERSION_OPT=""
 
@@ -190,8 +190,13 @@ function local_volumes() {
     # Apollo root and bazel cache dirs are required.
     volumes="-v $APOLLO_ROOT_DIR:/apollo \
              -v $HOME/.cache:${DOCKER_HOME}/.cache"
+    APOLLO_TELEOP="${APOLLO_ROOT_DIR}/../apollo-teleop"
+    if [ -d ${APOLLO_TELEOP} ]; then
+        volumes="-v ${APOLLO_TELEOP}:/apollo/modules/teleop ${volumes}"
+    fi
     case "$(uname -s)" in
         Linux)
+
             case "$(lsb_release -r | cut -f2)" in
                 14.04)
                     volumes="${volumes} "
@@ -311,23 +316,44 @@ function main(){
 
     info "Starting docker container \"${APOLLO_DEV}\" ..."
 
-    DOCKER_VERSION=$(docker version --format '{{.Client.Version}}' | cut -d'.' -f1)
-
-    if [[ $DOCKER_VERSION -ge "19" ]] && ! type nvidia-docker; then
-        DOCKER_CMD="docker"
-        USE_GPU=1
-        GPUS="--gpus all"
+    # Check nvidia-driver and GPU device.
+    USE_GPU=0
+    if [ -z "$(which nvidia-smi)" ]; then
+      warning "No nvidia-driver found! Use CPU."
+    elif [ -z "$(nvidia-smi)" ]; then
+      warning "No GPU device found! Use CPU."
     else
-        DOCKER_CMD="nvidia-docker"
-        USE_GPU=1
-        GPUS=""
+      USE_GPU=1
+    fi
+
+    # Try to use GPU in container.
+    DOCKER_RUN="docker run"
+    NVIDIA_DOCKER_DOC="https://github.com/NVIDIA/nvidia-docker/blob/master/README.md"
+    if [ ${USE_GPU} -eq 1 ]; then
+      DOCKER_VERSION=$(docker version --format '{{.Server.Version}}')
+      if ! [ -z "$(which nvidia-docker)" ]; then
+        DOCKER_RUN="nvidia-docker run"
+        warning "nvidia-docker is in deprecation!"
+        warning "Please install latest docker and nvidia-container-toolkit: ${NVIDIA_DOCKER_DOC}"
+      elif ! [ -z "$(which nvidia-container-toolkit)" ]; then
+        if dpkg --compare-versions "${DOCKER_VERSION}" "ge" "19.03"; then
+          DOCKER_RUN="docker run --gpus all"
+        else
+          warning "You must upgrade to docker-ce 19.03+ to access GPU from container!"
+          USE_GPU=0
+        fi
+      else
+        USE_GPU=0
+        warning "Cannot access GPU from container."
+        warning "Please install latest docker and nvidia-container-toolkit: ${NVIDIA_DOCKER_DOC}"
+      fi
     fi
 
     set -x
-    ${DOCKER_CMD} run -it \
+
+    ${DOCKER_RUN} -it \
         -d \
         --privileged \
-        ${GPUS} \
         --name $APOLLO_DEV \
         ${MAP_VOLUME_CONF} \
         ${OTHER_VOLUME_CONF} \

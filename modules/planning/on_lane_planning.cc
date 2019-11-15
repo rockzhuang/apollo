@@ -135,19 +135,19 @@ Status OnLanePlanning::InitFrame(const uint32_t sequence_num,
   }
   DCHECK_EQ(reference_lines.size(), segments.size());
 
-  auto forword_limit =
+  auto forward_limit =
       hdmap::PncMap::LookForwardDistance(vehicle_state.linear_velocity());
 
   for (auto& ref_line : reference_lines) {
     if (!ref_line.Segment(Vec2d(vehicle_state.x(), vehicle_state.y()),
-                          FLAGS_look_backward_distance, forword_limit)) {
+                          FLAGS_look_backward_distance, forward_limit)) {
       std::string msg = "Fail to shrink reference line.";
       return Status(ErrorCode::PLANNING_ERROR, msg);
     }
   }
   for (auto& seg : segments) {
     if (!seg.Shrink(Vec2d(vehicle_state.x(), vehicle_state.y()),
-                    FLAGS_look_backward_distance, forword_limit)) {
+                    FLAGS_look_backward_distance, forward_limit)) {
       std::string msg = "Fail to shrink routing segments.";
       return Status(ErrorCode::PLANNING_ERROR, msg);
     }
@@ -625,11 +625,26 @@ void AddSTGraph(const STGraphDebug& st_graph, Chart* chart) {
                        false, chart);
 
   for (const auto& boundary : st_graph.boundary()) {
-    auto* boundary_chart = chart->add_polygon();
-
     // from 'ST_BOUNDARY_TYPE_' to the end
     std::string type =
         StGraphBoundaryDebug_StBoundaryType_Name(boundary.type()).substr(17);
+
+    auto* boundary_chart = chart->add_polygon();
+    auto* properties = boundary_chart->mutable_properties();
+    (*properties)["borderWidth"] = "2";
+    (*properties)["pointRadius"] = "0";
+    (*properties)["lineTension"] = "0";
+    (*properties)["cubicInterpolationMode"] = "monotone";
+    (*properties)["showLine"] = "true";
+    (*properties)["showText"] = "true";
+    (*properties)["fill"] = "false";
+
+    if (type == "DRIVABLE_REGION") {
+      (*properties)["color"] = "\"rgba(0, 255, 0, 0.5)\"";
+    } else {
+      (*properties)["color"] = "\"rgba(255, 0, 0, 0.8)\"";
+    }
+
     boundary_chart->set_label(boundary.name() + "_" + type);
     for (const auto& point : boundary.point()) {
       auto* point_debug = boundary_chart->add_point();

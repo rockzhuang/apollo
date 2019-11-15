@@ -23,7 +23,7 @@ message ChangeLaneStatus {
   enum Status {
     IN_CHANGE_LANE = 1;       // during change lane state
     CHANGE_LANE_FAILED = 2;   // change lane failed
-    CHANGE_LANE_SUCCESS = 3;  // change lane succeeded
+    CHANGE_LANE_FINISHED = 3;  // change lane finished
   }
   optional Status status = 1;
   // the id of the route segment that the vehicle is driving on
@@ -33,6 +33,11 @@ message ChangeLaneStatus {
   // the starting position only after which lane-change can happen.
   optional bool exist_lane_change_start_position = 4 [default = false];
   optional apollo.common.Point3D lane_change_start_position = 5;
+  // the last time stamp when the lane-change planning succeed.
+  optional double last_succeed_timestamp = 6;
+  // if the current path and speed planning on the lane-change
+  // reference-line succeed.
+  optional bool is_current_opt_succeed = 7 [default = false];
 }
 
 message StopTime {
@@ -52,10 +57,8 @@ message DestinationStatus {
   optional bool has_passed_destination = 1 [default = false];
 }
 
-message EmergencyPullOverStatus {
-  optional apollo.common.PointENU position = 1;
-  optional double theta = 2;
-  optional bool is_in_emergency_pull_over_scenario = 3 [default = false];
+message EmergencyStopStatus {
+  optional apollo.common.PointENU stop_fence_point = 1;
 }
 
 message OpenSpaceStatus {
@@ -82,6 +85,8 @@ message PathDeciderStatus {
 
 message PathReuseDeciderStatus  {
   optional bool reused_path = 1 [default = true];
+  // count lane_change optimization failure frames
+  optional int32 lane_change_failure_counter = 2;
 }
 
 message PedestrianStatus {
@@ -89,15 +94,18 @@ message PedestrianStatus {
 }
 
 message PullOverStatus {
-  optional bool is_feasible = 1 [default = false];  // default must be false
-  optional apollo.common.PointENU position = 2;
-  optional double theta = 3;
-  optional double length_front = 4;
-  optional double length_back = 5;
-  optional double width_left = 6;
-  optional double width_right = 7;
-  optional int32 idx = 8;
-  optional bool is_in_pull_over_scenario = 9 [default = false];
+  enum PullOverType {
+    PULL_OVER = 1;   		  // pull-over upon destination arrival
+    EMERGENCY_PULL_OVER = 2;  // emergency pull-over
+  }
+  optional PullOverType pull_over_type = 1;
+  optional bool plan_pull_over_path = 2 [default = false];
+  optional apollo.common.PointENU position = 3;
+  optional double theta = 4;
+  optional double length_front = 5;
+  optional double length_back = 6;
+  optional double width_left = 7;
+  optional double width_right = 8;
 }
 
 message ReroutingStatus {
@@ -143,7 +151,7 @@ message PlanningStatus {
   optional ChangeLaneStatus change_lane = 2;
   optional CrosswalkStatus crosswalk = 3;
   optional DestinationStatus destination = 4;
-  optional EmergencyPullOverStatus emergency_pull_over = 5;
+  optional EmergencyStopStatus emergency_stop = 5;
   optional apollo.common.EngageAdvice engage_advice = 6;
   optional OpenSpaceStatus open_space = 7;
   optional PedestrianStatus pedestrian = 8;

@@ -18,14 +18,18 @@ export default class Dreamview extends React.Component {
         super(props);
         this.handleDrag = this.handleDrag.bind(this);
         this.handleKeyPress = this.handleKeyPress.bind(this);
-        this.updateDimension = this.props.store.updateDimension.bind(this.props.store);
+        this.updateDimension = this.props.store.dimension.update.bind(this.props.store.dimension);
     }
 
     handleDrag(masterViewWidth) {
-        const { options } = this.props.store;
+        const { options, dimension } = this.props.store;
         if (options.showMonitor) {
-            this.props.store.updateWidthInPercentage(
-                Math.min(1.00, masterViewWidth / window.innerWidth));
+            dimension.updateMonitorWidth(
+                Math.min(
+                    Math.max(window.innerWidth - masterViewWidth, 0),
+                    window.innerWidth
+                )
+            );
         }
     }
 
@@ -48,7 +52,7 @@ export default class Dreamview extends React.Component {
     }
 
     componentWillMount() {
-        this.props.store.initDimension();
+        this.props.store.dimension.initialize();
     }
 
     componentDidMount() {
@@ -73,7 +77,7 @@ export default class Dreamview extends React.Component {
                 <Header />
                 <div className="pane-container">
                     <SplitPane split="vertical"
-                        size={dimension.width}
+                        size={dimension.pane.width}
                         onChange={this.handleDrag}
                         allowResize={options.showMonitor}>
                         <div className="left-pane">

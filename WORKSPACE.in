@@ -87,8 +87,6 @@ new_local_repository(
 )
 
 # PCL 1.9
-# =======
-# This requires libpcl-dev to be installed in your Ubuntu/Debian.
 new_local_repository(
     name = "pcl",
     build_file = "third_party/pcl.BUILD",
@@ -277,6 +275,12 @@ grpc_deps()
 new_local_repository(
     name = "python27",
     build_file = "third_party/python27.BUILD",
+    path = "/usr",
+)
+
+new_local_repository(
+    name = "python3",
+    build_file = "third_party/python3.BUILD",
     path = "/usr",
 )
 

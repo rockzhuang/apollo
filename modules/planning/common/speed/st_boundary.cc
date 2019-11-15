@@ -20,6 +20,8 @@
 
 #include "modules/planning/common/speed/st_boundary.h"
 
+#include <limits>
+
 #include "cyber/common/log.h"
 #include "modules/common/math/math_utils.h"
 #include "modules/planning/common/planning_gflags.h"
@@ -61,6 +63,8 @@ STBoundary::STBoundary(
   }
   min_t_ = lower_points_.front().t();
   max_t_ = lower_points_.back().t();
+
+  obstacle_road_right_ending_t_ = std::numeric_limits<double>::lowest();
 }
 
 STBoundary::STBoundary(
@@ -97,6 +101,8 @@ STBoundary::STBoundary(
   }
   min_t_ = lower_points_.front().t();
   max_t_ = lower_points_.back().t();
+
+  obstacle_road_right_ending_t_ = std::numeric_limits<double>::lowest();
 }
 
 STBoundary STBoundary::CreateInstance(
@@ -167,6 +173,11 @@ bool STBoundary::GetUnblockSRange(const double curr_time, double* s_upper,
     AERROR << "Fail to get index range.";
     return false;
   }
+
+  if (curr_time > upper_points_[right].t()) {
+    return true;
+  }
+
   const double r =
       (left == right
            ? 0.0
@@ -221,6 +232,49 @@ bool STBoundary::GetBoundarySRange(const double curr_time, double* s_upper,
 
   *s_upper = std::fmin(*s_upper, FLAGS_speed_lon_decision_horizon);
   *s_lower = std::fmax(*s_lower, 0.0);
+  return true;
+}
+
+bool STBoundary::GetBoundarySlopes(const double curr_time, double* ds_upper,
+                                   double* ds_lower) const {
+  if (ds_upper == nullptr || ds_lower == nullptr) {
+    return false;
+  }
+  if (curr_time < min_t_ || curr_time > max_t_) {
+    return false;
+  }
+
+  constexpr double kTimeIncrement = 0.05;
+  double t_prev = curr_time - kTimeIncrement;
+  double prev_s_upper = 0.0;
+  double prev_s_lower = 0.0;
+  bool has_prev = GetBoundarySRange(t_prev, &prev_s_upper, &prev_s_lower);
+  double t_next = curr_time + kTimeIncrement;
+  double next_s_upper = 0.0;
+  double next_s_lower = 0.0;
+  bool has_next = GetBoundarySRange(t_next, &next_s_upper, &next_s_lower);
+  double curr_s_upper = 0.0;
+  double curr_s_lower = 0.0;
+  GetBoundarySRange(curr_time, &curr_s_upper, &curr_s_lower);
+  if (!has_prev && !has_next) {
+    return false;
+  }
+  if (has_prev && has_next) {
+    *ds_upper = ((next_s_upper - curr_s_upper) / kTimeIncrement +
+                 (curr_s_upper - prev_s_upper) / kTimeIncrement) *
+                0.5;
+    *ds_lower = ((next_s_lower - curr_s_lower) / kTimeIncrement +
+                 (curr_s_lower - prev_s_lower) / kTimeIncrement) *
+                0.5;
+    return true;
+  }
+  if (has_prev) {
+    *ds_upper = (curr_s_upper - prev_s_upper) / kTimeIncrement;
+    *ds_lower = (curr_s_lower - prev_s_lower) / kTimeIncrement;
+  } else {
+    *ds_upper = (next_s_upper - curr_s_upper) / kTimeIncrement;
+    *ds_lower = (next_s_lower - curr_s_lower) / kTimeIncrement;
+  }
   return true;
 }
 

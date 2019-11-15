@@ -1035,7 +1035,6 @@ void Visualizer::Draw2Dand3D_all_info_single_camera(
   if (show_lane_count_ > 0) {  // Do now show lane line
     for (const auto &object : frame.lane_objects) {
       cv::Scalar lane_color = colormapline[object.pos_type];
-      if (object.curve_image_point_set.empty()) continue;
       if (show_lane_count_ == 1) {  // show inlier points
         cv::Point p_prev;
         p_prev.x = static_cast<int>(object.curve_image_point_set[0].x);

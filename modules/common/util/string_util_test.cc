@@ -24,38 +24,6 @@ namespace apollo {
 namespace common {
 namespace util {
 
-TEST(StringUtilTest, Split) {
-  {
-    std::vector<std::string> result;
-    Split("abc.def", '.', &result);
-    EXPECT_EQ(result.size(), 2);
-    EXPECT_EQ(result[0], "abc");
-    EXPECT_EQ(result[1], "def");
-  }
-  {
-    std::vector<std::string> result;
-    Split("abc.def", 'x', &result);
-    EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0], "abc.def");
-  }
-}
-
-TEST(StringUtilTest, StartWith) {
-  EXPECT_TRUE(StartWith("abc.def", ""));
-  EXPECT_TRUE(StartWith("abc.def", "abc"));
-  EXPECT_TRUE(StartWith("abc.def", "abc."));
-  EXPECT_FALSE(StartWith("abc.def", "abcd"));
-  EXPECT_FALSE(StartWith("abc.def", "bc"));
-}
-
-TEST(StringUtilTest, EndWith) {
-  EXPECT_TRUE(EndWith("abc.def", ""));
-  EXPECT_TRUE(EndWith("abc.def", "def"));
-  EXPECT_TRUE(EndWith("abc.def", ".def"));
-  EXPECT_FALSE(EndWith("abc.def", "abc"));
-  EXPECT_FALSE(EndWith("abc.def", "de"));
-}
-
 TEST(StringUtilTest, IterPrinter) {
   // Container.
   std::vector<std::string> vec;

@@ -84,7 +84,7 @@ function check_esd_files() {
 
   if [ -f ./third_party/can_card_library/esd_can/include/ntcan.h \
       -a -f ./third_party/can_card_library/esd_can/lib/libntcan.so.4 \
-      -a -f ./third_party/can_card_library/esd_can/lib/libntcan.so.4.2.2 ]; then
+      -a -f ./third_party/can_card_library/esd_can/lib/libntcan.so.4.0.1 ]; then
       USE_ESD_CAN=true
       CAN_CARD="esd_can"
   else
@@ -279,10 +279,9 @@ function build_py_proto() {
     rm -rf py_proto
   fi
   mkdir py_proto
-  PROTOC='./bazel-out/host/bin/external/com_google_protobuf/protoc'
   find modules/ cyber/ -name "*.proto" \
       | grep -v node_modules \
-      | xargs ${PROTOC} --python_out=py_proto
+      | xargs protoc --python_out=py_proto
   find py_proto/* -type d -exec touch "{}/__init__.py" \;
 }
 
@@ -588,7 +587,7 @@ function run_bash_lint() {
 function run_lint() {
   # Add cpplint rule to BUILD files that do not contain it.
   for file in $(find cyber modules -name BUILD | \
-    grep -v gnss/third_party | grep -v modules/car1/encoder/nvenc_sdk6 | \
+    grep -v gnss/third_party | grep -v modules/teleop/encoder/nvenc_sdk6 | \
     xargs grep -l -E 'cc_library|cc_test|cc_binary' | xargs grep -L 'cpplint()')
   do
     sed -i '1i\load("//tools:cpplint.bzl", "cpplint")\n' $file

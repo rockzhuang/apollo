@@ -16,13 +16,14 @@
 
 #include "modules/dreamview/backend/hmi/hmi_worker.h"
 
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_split.h"
 #include "cyber/common/file.h"
 #include "modules/common/adapters/adapter_gflags.h"
 #include "modules/common/configs/config_gflags.h"
 #include "modules/common/kv_db/kv_db.h"
 #include "modules/common/util/map_util.h"
 #include "modules/common/util/message_util.h"
-#include "modules/common/util/string_tokenizer.h"
 #include "modules/common/util/string_util.h"
 #include "modules/dreamview/backend/common/dreamview_gflags.h"
 #include "modules/dreamview/backend/hmi/vehicle_manager.h"
@@ -52,7 +53,6 @@ using apollo::canbus::Chassis;
 using apollo::common::DriveEvent;
 using apollo::common::KVDB;
 using apollo::common::time::Clock;
-using apollo::common::util::StrAppend;
 using apollo::common::util::StrCat;
 using apollo::control::DrivingAction;
 using apollo::cyber::Node;
@@ -66,9 +66,7 @@ constexpr char kNavigationModeName[] = "Navigation";
 
 // Convert a string to be title-like. E.g.: "hello_world" -> "Hello World".
 std::string TitleCase(const std::string& origin) {
-  static const std::string kDelimiter = "_";
-  std::vector<std::string> parts =
-      apollo::common::util::StringTokenizer::Split(origin, kDelimiter);
+  std::vector<std::string> parts = absl::StrSplit(origin, '_');
   for (auto& part : parts) {
     if (!part.empty()) {
       // Upper case the first char.
@@ -189,12 +187,12 @@ HMIMode HMIWorker::LoadMode(const std::string& mode_config_path) {
     module.set_start_command("nohup mainboard");
     const auto& process_group = cyber_module.process_group();
     if (!process_group.empty()) {
-      StrAppend(module.mutable_start_command(), " -p ", process_group);
+      absl::StrAppend(module.mutable_start_command(), " -p ", process_group);
     }
     for (const std::string& dag : cyber_module.dag_files()) {
-      StrAppend(module.mutable_start_command(), " -d ", dag);
+      absl::StrAppend(module.mutable_start_command(), " -d ", dag);
     }
-    StrAppend(module.mutable_start_command(), " &");
+    absl::StrAppend(module.mutable_start_command(), " &");
 
     // Construct stop_command: pkill -f '<dag[0]>'
     const std::string& first_dag = cyber_module.dag_files(0);

@@ -10,21 +10,22 @@ cc_library(
     ],
     deps = [
         "//cyber",
-        "//modules/common/util:string_util",
         "//modules/drivers/proto:sensor_proto",
         "//modules/perception/lidar/common:pcl_util",
         "//modules/perception/onboard/transform_wrapper",
         "//modules/transform/proto:transform_proto",
+        "@com_google_absl//absl/strings",
         "@opencv",
     ],
 )
 
 cc_binary(
     name = "msg_exporter",
-    srcs = [
-        "msg_exporter_main.cc",
+    srcs = ["msg_exporter_main.cc"],
+    deps = [
+        ":msgexporterlib",
+        "@com_google_absl//absl/strings",
     ],
-    deps = [":msgexporterlib"],
 )
 
 cpplint()

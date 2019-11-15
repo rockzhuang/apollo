@@ -13,6 +13,7 @@ cc_library(
         "//modules/common/util",
         "//modules/common/util:string_util",
         "//modules/dreamview/proto:hmi_config_proto",
+        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -77,6 +78,7 @@ cc_library(
         "//modules/dreamview/proto:hmi_mode_proto",
         "//modules/dreamview/proto:hmi_status_proto",
         "@boost",
+        "@com_google_absl//absl/strings",
         "@com_google_protobuf//:protobuf",
     ],
 )

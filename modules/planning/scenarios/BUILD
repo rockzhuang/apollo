@@ -72,6 +72,8 @@ cc_library(
         "//modules/planning/common:planning_context",
         "//modules/planning/common/util:util_lib",
         "//modules/planning/scenarios/bare_intersection/unprotected:bare_intersection_unprotected_scenario",
+        "//modules/planning/scenarios/emergency/emergency_pull_over:emergency_pull_over_scenario",
+        "//modules/planning/scenarios/emergency/emergency_stop:emergency_stop_scenario",
         "//modules/planning/scenarios/lane_follow",
         "//modules/planning/scenarios/park/emergency_pull_over:emergency_pull_over_scenario",
         "//modules/planning/scenarios/park/pull_over:pull_over_scenario",

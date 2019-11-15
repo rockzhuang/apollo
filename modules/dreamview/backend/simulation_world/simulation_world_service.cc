@@ -18,6 +18,7 @@
 
 #include <unordered_set>
 
+#include "absl/strings/str_split.h"
 #include "cyber/common/file.h"
 #include "google/protobuf/util/json_util.h"
 #include "modules/canbus/proto/chassis.pb.h"
@@ -72,6 +73,7 @@ using apollo::relative_map::MapMsg;
 using apollo::relative_map::NavigationInfo;
 using apollo::routing::RoutingRequest;
 using apollo::routing::RoutingResponse;
+using apollo::storytelling::Stories;
 
 using Json = nlohmann::json;
 using ::google::protobuf::util::MessageToJsonString;
@@ -275,6 +277,7 @@ void SimulationWorldService::InitReaders() {
   navigation_reader_ =
       node_->CreateReader<NavigationInfo>(FLAGS_navigation_topic);
   relative_map_reader_ = node_->CreateReader<MapMsg>(FLAGS_relative_map_topic);
+  storytelling_reader_ = node_->CreateReader<Stories>(FLAGS_storytelling_topic);
 
   drive_event_reader_ = node_->CreateReader<DriveEvent>(
       FLAGS_drive_event_topic,
@@ -351,6 +354,7 @@ void SimulationWorldService::Update() {
   // may not always be perfectly aligned and belong to the same frame.
   obj_map_.clear();
   world_.clear_object();
+  UpdateWithLatestObserved(storytelling_reader_.get());
   UpdateWithLatestObserved(perception_obstacle_reader_.get());
   UpdateWithLatestObserved(perception_traffic_light_reader_.get(), false);
   UpdateWithLatestObserved(prediction_obstacle_reader_.get());
@@ -522,6 +526,22 @@ void SimulationWorldService::UpdateSimulationWorld(const Chassis &chassis) {
   UpdateTurnSignal(chassis.signal(), auto_driving_car);
 
   auto_driving_car->set_disengage_type(DeduceDisengageType(chassis));
+}
+
+template <>
+void SimulationWorldService::UpdateSimulationWorld(const Stories &stories) {
+  world_.clear_stories();
+  auto *world_stories = world_.mutable_stories();
+
+  const google::protobuf::Descriptor *descriptor = stories.GetDescriptor();
+  const google::protobuf::Reflection *reflection = stories.GetReflection();
+  const int field_count = descriptor->field_count();
+  for (int i = 0; i < field_count; ++i) {
+    const google::protobuf::FieldDescriptor *field = descriptor->field(i);
+    if (field->name() != "header") {
+      (*world_stories)[field->name()] = reflection->HasField(stories, field);
+    }
+  }
 }
 
 Object &SimulationWorldService::CreateWorldObjectIfAbsent(
@@ -819,8 +839,8 @@ void SimulationWorldService::UpdateDecision(const DecisionResult &decision_res,
           if (decision.has_stop()) {
             // flag yielded obstacles
             for (auto obstacle_id : decision.stop().wait_for_obstacle()) {
-              std::vector<std::string> id_segments;
-              apollo::common::util::Split(obstacle_id, '_', &id_segments);
+              const std::vector<std::string> id_segments =
+                  absl::StrSplit(obstacle_id, '_');
               if (id_segments.size() > 0) {
                 obj_map_[id_segments[0]].set_yielded_obstacle(true);
               }
@@ -951,10 +971,38 @@ void SimulationWorldService::UpdatePlanningData(const PlanningData &data) {
   }
 
   // Update pull over status
-  planning_data->clear_pull_over_status();
-  if (data.has_pull_over_status()) {
-    planning_data->mutable_pull_over_status()->CopyFrom(
-        data.pull_over_status());
+  planning_data->clear_pull_over();
+  if (data.has_pull_over()) {
+    planning_data->mutable_pull_over()->CopyFrom(data.pull_over());
+  }
+
+  // Update planning signal
+  world_.clear_traffic_signal();
+  if (data.has_signal_light() && data.signal_light().signal_size() > 0) {
+    TrafficLight::Color current_signal = TrafficLight::UNKNOWN;
+    int green_light_count = 0;
+
+    for (auto &signal : data.signal_light().signal()) {
+      switch (signal.color()) {
+        case TrafficLight::RED:
+        case TrafficLight::YELLOW:
+        case TrafficLight::BLACK:
+          current_signal = signal.color();
+          break;
+        case TrafficLight::GREEN:
+          green_light_count++;
+          break;
+        default:
+          break;
+      }
+    }
+
+    if (green_light_count == data.signal_light().signal_size()) {
+      current_signal = TrafficLight::GREEN;
+    }
+
+    world_.mutable_traffic_signal()->set_current_signal(
+        TrafficLight_Color_Name(current_signal));
   }
 
   // Update planning signal

@@ -54,7 +54,11 @@ DEFINE_string(scenario_pull_over_config_file,
 DEFINE_string(scenario_emergency_pull_over_config_file,
               "/apollo/modules/planning/conf/"
               "scenario/emergency_pull_over_config.pb.txt",
-              "The pull_over_emergency scenario configuration file");
+              "The emergency_pull_over scenario configuration file");
+DEFINE_string(scenario_emergency_stop_config_file,
+              "/apollo/modules/planning/conf/"
+              "scenario/emergency_stop_config.pb.txt",
+              "The emergency_stop scenario configuration file");
 DEFINE_string(scenario_stop_sign_unprotected_config_file,
               "/apollo/modules/planning/conf/"
               "scenario/stop_sign_unprotected_config.pb.txt",
@@ -90,10 +94,10 @@ DEFINE_bool(enable_scenario_pull_over, false,
             "enable pull-over scenario in planning");
 
 DEFINE_bool(enable_scenario_emergency_pull_over, false,
-            "enable pull-over-emregency scenario in planning");
+            "enable emregency-pull-over scenario in planning");
 
-DEFINE_bool(enable_pull_over_exit, false,
-            "allow pull-over scenario exit to lane follow in planning");
+DEFINE_bool(enable_scenario_emergency_stop, false,
+            "enable emregency-stop scenario in planning");
 
 DEFINE_bool(enable_scenario_side_pass_multiple_parked_obstacles, true,
             "enable ADC to side-pass multiple parked obstacles without"
@@ -157,7 +161,7 @@ DEFINE_bool(reckless_change_lane, false,
 DEFINE_double(change_lane_fail_freeze_time, 1.0,
               "seconds. Not allowed to change lane this amount of time "
               "if it just failed to change lane");
-DEFINE_double(change_lane_success_freeze_time, 3.0,
+DEFINE_double(change_lane_success_freeze_time, 1.5,
               "seconds. Not allowed to change lane this amount of time "
               "if it just finished change lane");
 DEFINE_double(change_lane_min_length, 30.0,
@@ -347,8 +351,15 @@ DEFINE_double(perception_confidence_threshold, 0.4,
               "Skip the obstacle if its confidence is lower than "
               "this threshold.");
 
-DEFINE_double(lane_change_prepare_length, 40.0,
+DEFINE_double(lane_change_prepare_length, 80.0,
               "The distance of lane-change preparation on current lane.");
+
+DEFINE_double(min_lane_change_prepare_length, 10.0,
+              "The minimal distance needed of lane-change on current lane.");
+
+DEFINE_double(allowed_lane_change_failure_time, 2.0,
+              "The time allowed for lane-change failure before updating"
+              "preparation distance.");
 
 DEFINE_bool(enable_smarter_lane_change, false,
             "enable smarter lane change with longer preparation distance.");
@@ -579,3 +590,6 @@ DEFINE_uint64(trajectory_stitching_preserved_length, 20,
 
 DEFINE_double(side_pass_driving_width_l_buffer, 0.1,
               "(unit: meter) for side pass driving width l buffer");
+
+DEFINE_bool(use_st_drivable_boundary, false,
+            "True to use st_drivable boundary in speed planning");

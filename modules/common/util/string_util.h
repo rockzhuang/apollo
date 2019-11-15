@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/strings/str_cat.h"
 #include "boost/algorithm/string.hpp"
 #include "google/protobuf/stubs/stringprintf.h"
 #include "google/protobuf/stubs/strutil.h"
@@ -39,32 +40,10 @@ namespace common {
 namespace util {
 
 // Expose some useful utils from protobuf.
+using absl::StrCat;
 using google::protobuf::Join;
-using google::protobuf::StrAppend;
-using google::protobuf::StrCat;
+// TODO(xiaoxq): Migrate to absl::StrFormat after absl upgraded.
 using google::protobuf::StringPrintf;
-
-/**
- * @brief Check if a string ends with a pattern.
- * @param ori The original string. To see if it ends with a specified pattern.
- * @param pat The target pattern. To see if the original string ends with it.
- * @return Whether the original string ends with the specified pattern.
- */
-inline bool EndWith(const std::string& ori, const std::string& pat) {
-  return std::equal(pat.rbegin(), pat.rend(), ori.rbegin());
-}
-inline bool StartWith(const std::string& ori, const std::string& pat) {
-  return std::equal(pat.begin(), pat.end(), ori.begin());
-}
-
-/**
- * @brief split string by one character
- * @param [in]: the string you want to split
- * @param [in]: the character
- * @param [out]: result strings after exploded by character
- * @return: the number of elements splitted in the given str
- **/
-int Split(const std::string& str, char ch, std::vector<std::string>* result);
 
 template <typename T>
 std::string Print(const T& val) {
@@ -104,9 +83,9 @@ std::string PrintIter(const Iter& begin, const Iter& end,
   if (transformer) {
     for (auto iter = begin; iter != end; ++iter) {
       if (iter == begin) {
-        StrAppend(&result, transformer(*iter));
+        absl::StrAppend(&result, transformer(*iter));
       } else {
-        StrAppend(&result, delimiter, transformer(*iter));
+        absl::StrAppend(&result, delimiter, transformer(*iter));
       }
     }
   } else {
@@ -151,9 +130,9 @@ std::string PrintDebugStringIter(const Iter& begin, const Iter& end,
   std::string result;
   for (auto iter = begin; iter != end; ++iter) {
     if (iter == begin) {
-      StrAppend(&result, iter->DebugString());
+      absl::StrAppend(&result, iter->DebugString());
     } else {
-      StrAppend(&result, delimiter, iter->DebugString());
+      absl::StrAppend(&result, delimiter, iter->DebugString());
     }
   }
   return result;
