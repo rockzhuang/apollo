@@ -232,8 +232,10 @@ function main(){
     docker ps -a --format "{{.Names}}" | grep "$APOLLO_DEV" 1>/dev/null
     if [ $? == 0 ]; then
         if [[ "$(docker inspect --format='{{.Config.Image}}' $APOLLO_DEV 2> /dev/null)" != "$IMG" ]]; then
-            rm -rf $APOLLO_ROOT_DIR/bazel-*
-            rm -rf $HOME/.cache/bazel/*
+            # rm -rf $APOLLO_ROOT_DIR/bazel-*
+            # rm -rf $HOME/.cache/bazel/*
+            error "To delete bazel files, what's happening???"
+            # exit 1
         fi
         docker stop $APOLLO_DEV 1>/dev/null
         docker rm -v -f $APOLLO_DEV 1>/dev/null
@@ -309,10 +311,6 @@ function main(){
 
     info "Starting docker container \"${APOLLO_DEV}\" ..."
 
-<<<<<<< HEAD
-    DOCKER_CMD="docker"
-    USE_GPU=1
-=======
     DOCKER_VERSION=$(docker version --format '{{.Client.Version}}' | cut -d'.' -f1)
 
     if [[ $DOCKER_VERSION -ge "19" ]] && ! type nvidia-docker; then
@@ -324,11 +322,9 @@ function main(){
         USE_GPU=1
         GPUS=""
     fi
->>>>>>> lgsvl/simulator
 
     set -x
     ${DOCKER_CMD} run -it \
-        --gpus all \
         -d \
         --privileged \
         ${GPUS} \
