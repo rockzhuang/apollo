@@ -363,8 +363,8 @@ void NaviPlanning::ProcessPadMsg(DrivingAction drvie_action) {
     }
 
     if (!target_lane_id_.empty()) {
-      constexpr uint32_t KTargetRefLinePriority = 0;
-      constexpr uint32_t kOtherRefLinePriority = 10;
+      static constexpr uint32_t KTargetRefLinePriority = 0;
+      static constexpr uint32_t kOtherRefLinePriority = 10;
       for (auto& ref_line_info : ref_line_info_group) {
         auto lane_id = ref_line_info.Lanes().Id();
         ADEBUG << "lane_id : " << lane_id;
@@ -413,7 +413,7 @@ void NaviPlanning::GetLeftNeighborLanesInfo(
     double y = ref_point.y();
     // in FLU positive on the left
     if (y > 0.0) {
-      lane_info_group->emplace_back(std::make_pair(lane_id, y));
+      lane_info_group->emplace_back(lane_id, y);
     }
   }
   // sort neighbor lanes from near to far
@@ -441,7 +441,7 @@ void NaviPlanning::GetRightNeighborLanesInfo(
     double y = ref_point.y();
     // in FLU negative on the right
     if (y < 0.0) {
-      lane_info_group->emplace_back(std::make_pair(lane_id, y));
+      lane_info_group->emplace_back(lane_id, y);
     }
   }
 
@@ -539,7 +539,7 @@ Status NaviPlanning::Plan(
   last_publishable_trajectory_.reset(new PublishableTrajectory(
       current_time_stamp, best_ref_info->trajectory()));
 
-  ADEBUG << "current_time_stamp: " << std::to_string(current_time_stamp);
+  ADEBUG << "current_time_stamp: " << current_time_stamp;
 
   // Navi Planner doesn't need to stitch the last path planning
   // trajectory.Otherwise, it will cause the Dreamview planning track to display

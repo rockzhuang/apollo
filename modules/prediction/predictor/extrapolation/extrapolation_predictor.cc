@@ -33,7 +33,7 @@ ExtrapolationPredictor::ExtrapolationPredictor() {
   predictor_type_ = ObstacleConf::EXTRAPOLATION_PREDICTOR;
 }
 
-void ExtrapolationPredictor::Predict(
+bool ExtrapolationPredictor::Predict(
     const ADCTrajectoryContainer* adc_trajectory_container, Obstacle* obstacle,
     ObstaclesContainer* obstacles_container) {
   Clear();
@@ -47,17 +47,23 @@ void ExtrapolationPredictor::Predict(
 
   if (!feature_ptr->lane().has_lane_graph()) {
     AERROR << "Obstacle [" << obstacle->id() << "] has no lane graph.";
-    return;
+    return false;
+  }
+  if (feature_ptr->predicted_trajectory().empty()) {
+    AERROR << "Obstacle [" << obstacle->id()
+           << "] has no short-term trajectories.";
+    return false;
   }
   for (int i = 0; i < feature_ptr->predicted_trajectory_size(); ++i) {
     Trajectory* trajectory_ptr = feature_ptr->mutable_predicted_trajectory(i);
     PostProcess(trajectory_ptr);
   }
+  return true;
 }
 
 void ExtrapolationPredictor::PostProcess(Trajectory* trajectory_ptr) {
   // TODO(kechxu) handle corner cases
-  constexpr int kNumTailPoint = 5;
+  static constexpr int kNumTailPoint = 5;
   ExtrapolationPredictor::LaneSearchResult lane_search_result =
       SearchExtrapolationLane(*trajectory_ptr, kNumTailPoint);
   double extraplation_speed =
@@ -72,8 +78,8 @@ void ExtrapolationPredictor::PostProcess(Trajectory* trajectory_ptr) {
 ExtrapolationPredictor::LaneSearchResult
 ExtrapolationPredictor::SearchExtrapolationLane(const Trajectory& trajectory,
                                                 const int num_tail_point) {
-  constexpr double radius = 1.0;
-  constexpr double angle_diff_threshold = M_PI / 3.0;
+  static constexpr double radius = 1.0;
+  static constexpr double angle_diff_threshold = M_PI / 3.0;
   int num_trajectory_point = trajectory.trajectory_point_size();
 
   LaneSearchResult lane_search_result;
@@ -205,14 +211,13 @@ double ExtrapolationPredictor::ComputeExtraplationSpeed(
     const int num_tail_point, const Trajectory& trajectory) {
   int num_trajectory_point = trajectory.trajectory_point_size();
   CHECK_GT(num_trajectory_point, num_tail_point);
-  double time_resolution = FLAGS_prediction_trajectory_time_resolution;
-  const TrajectoryPoint& last_point =
-      trajectory.trajectory_point(num_trajectory_point - 1);
-  const TrajectoryPoint& mid_point =
-      trajectory.trajectory_point(num_trajectory_point - num_tail_point);
-  double diff_x = last_point.path_point().x() - mid_point.path_point().x();
-  double diff_y = last_point.path_point().y() - mid_point.path_point().y();
-  return std::hypot(diff_x, diff_y) / (num_tail_point * time_resolution);
+  CHECK_GT(num_tail_point, 0);
+  double v_sum = 0.0;
+  int mid_index = num_trajectory_point - num_tail_point;
+  for (int i = mid_index; i < num_trajectory_point; ++i) {
+    v_sum += trajectory.trajectory_point(i).v();
+  }
+  return v_sum / static_cast<double>(num_tail_point);
 }
 
 }  // namespace prediction

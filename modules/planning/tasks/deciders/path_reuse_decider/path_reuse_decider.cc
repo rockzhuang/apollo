@@ -44,6 +44,8 @@ Status PathReuseDecider::Process(Frame* const frame,
   CHECK_NOTNULL(frame);
   CHECK_NOTNULL(reference_line_info);
 
+  bool is_change_lane_path = reference_line_info->IsChangeLanePath();
+
   // active path reuse during change_lane only
   auto* lane_change_status = PlanningContext::Instance()
                                  ->mutable_planning_status()
@@ -58,17 +60,22 @@ Status PathReuseDecider::Process(Frame* const frame,
                                                 ->mutable_path_reuse_decider();
   ADEBUG << "lane_change_status->is_current_opt_succeed(): "
          << lane_change_status->is_current_opt_succeed();
-  // reuse path when: in change lane status; reuse_path is enable and
-  // optimization is successful
-  if (!lane_change_status->is_current_opt_succeed() ||
-      lane_change_status->status() != ChangeLaneStatus::IN_CHANGE_LANE ||
-      !Decider::config_.path_reuse_decider_config().reuse_path()) {
-    /* increase total path number when fail to reuse due to optimization*/
-    if (lane_change_status->status() == ChangeLaneStatus::IN_CHANGE_LANE &&
-        Decider::config_.path_reuse_decider_config().reuse_path()) {
-      ++total_path_counter_;
-    }
+
+  if (!Decider::config_.path_reuse_decider_config().reuse_path() ||
+      lane_change_status->status() != ChangeLaneStatus::IN_CHANGE_LANE) {
     ADEBUG << "skipping reusing path";
+    return Status::OK();
+  }
+
+  /*count total_path_ when in_change_lane && reuse_path*/
+  ++total_path_counter_;
+
+  /*reuse path when in non_change_lane reference line or
+    optimization succeeded in change_lane reference line
+  */
+  if (!is_change_lane_path || lane_change_status->is_current_opt_succeed()) {
+    mutable_path_reuse_decider_status->set_reused_path(true);
+  } else {
     mutable_path_reuse_decider_status->set_reused_path(false);
     ADEBUG << "reusable_path_counter_" << reusable_path_counter_;
     ADEBUG << "total_path_counter_" << total_path_counter_;
@@ -78,7 +85,7 @@ Status PathReuseDecider::Process(Frame* const frame,
   auto* mutable_path_decider_status = PlanningContext::Instance()
                                           ->mutable_planning_status()
                                           ->mutable_path_decider();
-  constexpr int kWaitCycle = -2;  // wait 2 cycle
+  static constexpr int kWaitCycle = -2;  // wait 2 cycle
 
   ADEBUG << "reuse or not: "
          << mutable_path_reuse_decider_status->reused_path();
@@ -88,7 +95,7 @@ Status PathReuseDecider::Process(Frame* const frame,
   // T -> F
   if (mutable_path_reuse_decider_status->reused_path()) {
     bool trimmed = TrimHistoryPath(frame, reference_line_info);
-    ADEBUG << "reused path";
+    ADEBUG << "reusing path....";
     ADEBUG << "is replane: "
            << frame->current_frame_planned_trajectory().is_replan();
     ADEBUG << "is reusable: " << CheckPathReusable(frame, reference_line_info);
@@ -118,7 +125,6 @@ Status PathReuseDecider::Process(Frame* const frame,
       mutable_path_reuse_decider_status->set_reused_path(true);
     }
   }
-  ++total_path_counter_;
   ADEBUG << "reusable_path_counter_" << reusable_path_counter_;
   ADEBUG << "total_path_counter_" << total_path_counter_;
   return Status::OK();
@@ -133,8 +139,8 @@ bool PathReuseDecider::CheckPathReusable(
 bool PathReuseDecider::IsIgnoredBlockingObstacle(
     ReferenceLineInfo* const reference_line_info) {
   const ReferenceLine& reference_line = reference_line_info->reference_line();
-  constexpr double kSDistBuffer = 30.0;  // meter
-  constexpr int kTimeBuffer = 3;         // second
+  static constexpr double kSDistBuffer = 30.0;  // meter
+  static constexpr int kTimeBuffer = 3;         // second
   // vehicle speed
   double adc_speed =
       common::VehicleStateProvider::Instance()->linear_velocity();
@@ -188,10 +194,10 @@ void PathReuseDecider::GetADCSLPoint(const ReferenceLine& reference_line,
 bool PathReuseDecider::IsCollisionFree(
     ReferenceLineInfo* const reference_line_info) {
   const ReferenceLine& reference_line = reference_line_info->reference_line();
-  constexpr double kMinObstacleArea = 1e-4;
+  static constexpr double kMinObstacleArea = 1e-4;
   const double kSBuffer = 0.5;
-  constexpr int kNumExtraTailBoundPoint = 21;
-  constexpr double kPathBoundsDeciderResolution = 0.5;
+  static constexpr int kNumExtraTailBoundPoint = 21;
+  static constexpr double kPathBoundsDeciderResolution = 0.5;
   // current vehicle sl position
   common::SLPoint adc_position_sl;
   GetADCSLPoint(reference_line, &adc_position_sl);
@@ -293,7 +299,7 @@ bool PathReuseDecider::IsCollisionFree(
 // check the length of the path
 bool PathReuseDecider::NotShortPath(const DiscretizedPath& current_path) {
   // TODO(shu): use gflag
-  constexpr double kShortPathThreshold = 15;
+  static constexpr double kShortPathThreshold = 15;
   return current_path.size() >= kShortPathThreshold;
 }
 

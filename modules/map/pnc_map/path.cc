@@ -20,6 +20,8 @@
 #include <limits>
 #include <unordered_map>
 
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "modules/common/math/line_segment2d.h"
 #include "modules/common/math/math_utils.h"
 #include "modules/common/math/polygon2d.h"
@@ -37,6 +39,7 @@ using apollo::common::math::kMathEpsilon;
 using apollo::common::math::LineSegment2d;
 using apollo::common::math::Sqr;
 using apollo::common::math::Vec2d;
+using apollo::common::util::DebugStringFormatter;
 using std::placeholders::_1;
 
 namespace {
@@ -62,7 +65,7 @@ std::string LaneWaypoint::DebugString() const {
   if (lane == nullptr) {
     return "(lane is null)";
   }
-  return common::util::StrCat("id = ", lane->id().id(), "  s = ", s);
+  return absl::StrCat("id = ", lane->id().id(), "  s = ", s);
 }
 
 LaneBoundaryType::Type LeftBoundaryType(const LaneWaypoint& waypoint) {
@@ -129,7 +132,7 @@ LaneWaypoint LeftNeighborWaypoint(const LaneWaypoint& waypoint) {
 }
 
 void LaneSegment::Join(std::vector<LaneSegment>* segments) {
-  constexpr double kSegmentDelta = 0.5;
+  static constexpr double kSegmentDelta = 0.5;
   std::size_t k = 0;
   std::size_t i = 0;
   while (i < segments->size()) {
@@ -187,13 +190,8 @@ std::string LaneSegment::DebugString() const {
   if (lane == nullptr) {
     return "(lane is null)";
   }
-  return common::util::StrCat("id = ", lane->id().id(),
-                              "  "
-                              "start_s = ",
-                              start_s,
-                              "  "
-                              "end_s = ",
-                              end_s);
+  return absl::StrCat("id = ", lane->id().id(), "  start_s = ", start_s,
+                      "  end_s = ", end_s);
 }
 
 std::vector<MapPathPoint> MapPathPoint::GetPointsFromSegment(
@@ -237,8 +235,9 @@ std::vector<MapPathPoint> MapPathPoint::GetPointsFromLane(LaneInfoConstPtr lane,
 }
 
 void MapPathPoint::RemoveDuplicates(std::vector<MapPathPoint>* points) {
-  constexpr double kDuplicatedPointsEpsilon = 1e-7;
-  constexpr double limit = kDuplicatedPointsEpsilon * kDuplicatedPointsEpsilon;
+  static constexpr double kDuplicatedPointsEpsilon = 1e-7;
+  static constexpr double limit =
+      kDuplicatedPointsEpsilon * kDuplicatedPointsEpsilon;
   CHECK_NOTNULL(points);
   int count = 0;
   for (size_t i = 0; i < points->size(); ++i) {
@@ -253,29 +252,29 @@ void MapPathPoint::RemoveDuplicates(std::vector<MapPathPoint>* points) {
 }
 
 std::string MapPathPoint::DebugString() const {
-  return common::util::StrCat(
+  return absl::StrCat(
       "x = ", x_, "  y = ", y_, "  heading = ", heading_,
       "  lwp = "
       "{(",
-      common::util::PrintDebugStringIter(lane_waypoints_, "), ("), ")}");
+      absl::StrJoin(lane_waypoints_, "), (", DebugStringFormatter()), ")}");
 }
 
 std::string Path::DebugString() const {
-  return common::util::StrCat(
+  return absl::StrCat(
       "num_points = ", num_points_,
       "  points = "
       "{(",
-      common::util::PrintDebugStringIter(path_points_, "), ("),
+      absl::StrJoin(path_points_, "), (", DebugStringFormatter()),
       ")}  "
       "numlane_segments_ = ",
       lane_segments_.size(),
       "  lane_segments = "
       "{(",
-      common::util::PrintDebugStringIter(lane_segments_, "), ("), ")}");
+      absl::StrJoin(lane_segments_, "), (", DebugStringFormatter()), ")}");
 }
 
 std::string PathOverlap::DebugString() const {
-  return common::util::StrCat(object_id, " ", start_s, " ", end_s);
+  return absl::StrCat(object_id, " ", start_s, " ", end_s);
 }
 
 Path::Path(const std::vector<MapPathPoint>& path_points)

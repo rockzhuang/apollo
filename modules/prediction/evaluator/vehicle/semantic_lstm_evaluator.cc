@@ -114,7 +114,7 @@ bool SemanticLSTMEvaluator::Evaluate(Obstacle* obstacle_ptr,
 
   auto end_time = std::chrono::system_clock::now();
   std::chrono::duration<double> diff = end_time - start_time;
-  AERROR << "Semantic_LSTM_evaluator used time: " << diff.count() * 1000
+  ADEBUG << "Semantic_LSTM_evaluator used time: " << diff.count() * 1000
          << " ms.";
   auto torch_output = torch_output_tensor.accessor<float, 3>();
 
@@ -168,6 +168,20 @@ bool SemanticLSTMEvaluator::Evaluate(Obstacle* obstacle_ptr,
     point->mutable_gaussian_info()->set_sigma_x(sigma_x);
     point->mutable_gaussian_info()->set_sigma_y(sigma_y);
     point->mutable_gaussian_info()->set_correlation(corr);
+
+    if (i > 0) {
+      Eigen::EigenSolver<Eigen::Matrix2d> eigen_solver(cov_matrix);
+      const auto& eigen_values = eigen_solver.eigenvalues();
+      const auto& eigen_vectors = eigen_solver.eigenvectors();
+      point->mutable_gaussian_info()->set_ellipse_a(
+          std::sqrt(std::abs(eigen_values(0).real())));
+      point->mutable_gaussian_info()->set_ellipse_b(
+          std::sqrt(std::abs(eigen_values(1).real())));
+      double cos_theta_a = eigen_vectors(0, 0).real();
+      double sin_theta_a = eigen_vectors(1, 0).real();
+      point->mutable_gaussian_info()->set_theta_a(
+          std::atan2(sin_theta_a, cos_theta_a));
+    }
 
     if (i < 10) {  // use origin heading for the first second
       point->mutable_path_point()->set_theta(
@@ -225,6 +239,19 @@ void SemanticLSTMEvaluator::LoadModel() {
         torch::jit::load(FLAGS_torch_vehicle_semantic_lstm_cpu_file, device_);
   }
   torch::set_num_threads(1);
+
+  // Fake intput for the first frame
+  torch::Tensor img_tensor = torch::zeros({1, 3, 224, 224});
+  torch::Tensor obstacle_pos = torch::zeros({1, 20, 2});
+  torch::Tensor obstacle_pos_step = torch::zeros({1, 20, 2});
+  std::vector<torch::jit::IValue> torch_inputs;
+  torch_inputs.push_back(c10::ivalue::Tuple::create(
+      {std::move(img_tensor.to(device_)), std::move(obstacle_pos.to(device_)),
+       std::move(obstacle_pos_step.to(device_))},
+      c10::TupleType::create(
+          std::vector<c10::TypePtr>(3, c10::TensorType::create()))));
+  at::Tensor torch_output_tensor =
+      torch_model_.forward(torch_inputs).toTensor().to(torch::kCPU);
 }
 
 }  // namespace prediction

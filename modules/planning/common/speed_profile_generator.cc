@@ -57,7 +57,6 @@ SpeedData SpeedProfileGenerator::GenerateFallbackSpeed(
   }
 
   std::array<double, 3> init_s = {0.0, init_v, init_a};
-  std::array<double, 3> end_s = {stop_distance, 0.0, 0.0};
 
   // TODO(all): dt is too small;
   double delta_t = FLAGS_fallback_time_unit;
@@ -67,7 +66,8 @@ SpeedData SpeedProfileGenerator::GenerateFallbackSpeed(
   PiecewiseJerkSpeedProblem piecewise_jerk_problem(num_of_knots, delta_t,
                                                    init_s);
 
-  piecewise_jerk_problem.set_end_state_ref({1000.0, 0.0, 0.0}, end_s);
+  std::vector<double> end_state_ref(num_of_knots, stop_distance);
+  piecewise_jerk_problem.set_x_ref(1000.0, end_state_ref);
 
   // TODO(Hongyi): tune the params and move to a config
   piecewise_jerk_problem.set_weight_ddx(1.0);
@@ -154,8 +154,8 @@ SpeedData SpeedProfileGenerator::GenerateStopProfile(const double init_speed,
 
 SpeedData SpeedProfileGenerator::GenerateFixedDistanceCreepProfile(
     const double distance, const double max_speed) {
-  constexpr double kConstDeceleration = -0.8;  // (~3sec to fully stop)
-  constexpr double kProceedingSpeed = 2.23;    // (5mph proceeding speed)
+  static constexpr double kConstDeceleration = -0.8;  // (~3sec to fully stop)
+  static constexpr double kProceedingSpeed = 2.23;    // (5mph proceeding speed)
   const double proceeding_speed = std::fmin(max_speed, kProceedingSpeed);
   const double distance_to_start_deceleration =
       proceeding_speed * proceeding_speed / kConstDeceleration / 2;
@@ -166,7 +166,7 @@ SpeedData SpeedProfileGenerator::GenerateFixedDistanceCreepProfile(
   double s = 0.0;
   double v = proceeding_speed;
 
-  constexpr double kDeltaT = 0.1;
+  static constexpr double kDeltaT = 0.1;
 
   SpeedData speed_data;
   while (s < distance && v > 0) {

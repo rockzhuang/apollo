@@ -256,7 +256,8 @@ Status LatController::Init(const ControlConf *control_conf) {
   bool enable_mrac =
       control_conf_->lat_controller_conf().enable_steer_mrac_control();
   if (enable_mrac) {
-    mrac_controller_.Init(lat_controller_conf.steer_mrac_conf(), ts_);
+    mrac_controller_.Init(lat_controller_conf.steer_mrac_conf(),
+                          vehicle_param_.steering_latency_param(), ts_);
   }
 
   return Status::OK();
@@ -504,15 +505,15 @@ Status LatController::ComputeControlCommand(
   // Compute the steering command limit with the given maximum lateral
   // acceleration
   const double steer_limit =
-      (FLAGS_set_steer_limit) ? std::atan(max_lat_acc_ * wheelbase_ /
-                                          (vehicle_state->linear_velocity() *
-                                           vehicle_state->linear_velocity())) *
-                                    steer_ratio_ * 180 / M_PI /
-                                    steer_single_direction_max_degree_ * 100
-                              : 100.0;
+      FLAGS_set_steer_limit ? std::atan(max_lat_acc_ * wheelbase_ /
+                                        (vehicle_state->linear_velocity() *
+                                         vehicle_state->linear_velocity())) *
+                                  steer_ratio_ * 180 / M_PI /
+                                  steer_single_direction_max_degree_ * 100
+                            : 100.0;
 
   const double steer_diff_with_max_rate =
-      (FLAGS_enable_maximum_steer_rate_limit)
+      FLAGS_enable_maximum_steer_rate_limit
           ? vehicle_param_.max_steer_angle_rate() * ts_ * 180 / M_PI /
                 steer_single_direction_max_degree_ * 100
           : 100.0;
@@ -534,6 +535,23 @@ Status LatController::ComputeControlCommand(
     }
     steer_angle = mrac_controller_.Control(
         steer_angle, steer_state, steer_limit, steer_diff_with_max_rate / ts_);
+    // Set the steer mrac debug message
+    MracDebug *mracdebug = debug->mutable_steer_mrac_debug();
+    Matrix steer_reference = mrac_controller_.CurrentReferenceState();
+    mracdebug->set_mrac_model_order(mrac_model_order);
+    for (int i = 0; i < mrac_model_order; ++i) {
+      mracdebug->add_mrac_reference_state(steer_reference(i, 0));
+      mracdebug->add_mrac_state_error(steer_state(i, 0) -
+                                      steer_reference(i, 0));
+      mracdebug->mutable_mrac_adaptive_gain()->add_state_adaptive_gain(
+          mrac_controller_.CurrentStateAdaptionGain()(i, 0));
+    }
+    mracdebug->mutable_mrac_adaptive_gain()->add_input_adaptive_gain(
+        mrac_controller_.CurrentInputAdaptionGain()(0, 0));
+    mracdebug->set_mrac_reference_saturation_status(
+        mrac_controller_.ReferenceSaturationStatus());
+    mracdebug->set_mrac_control_saturation_status(
+        mrac_controller_.ControlSaturationStatus());
   }
   pre_steering_position_ = steering_position;
 

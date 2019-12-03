@@ -56,19 +56,19 @@ function print_usage() {
   ${BLUE}version${NONE}: display current commit and date
   ${BLUE}push${NONE}: pushes the images to Docker hub
   ${BLUE}gen${NONE}: generate a docker release image
-  ${BLUE}ota_gen${NONE}: generate a ota docker release image
+  ${BLUE}ota_gen${NONE}: generate an ota docker release image
   "
 }
 
 function start_build_docker() {
   docker ps --format "{{.Names}}" | grep apollo_dev_$USER 1>/dev/null 2>&1
-  if [ $? != 0 ]; then    
-    # If Google is reachable, we fetch the docker image directly. 
+  if [ $? != 0 ]; then
+    # If Google is reachable, we fetch the docker image directly.
     if ping -q -c 1 -W 1 www.google.com 1>/dev/null 2>&1; then
       opt=""
     else
       ping -q -c 1 -W 1 www.baidu.com 1>/dev/null 2>&1
-      # If Baidu is unreachable, we use local images. 
+      # If Baidu is unreachable, we use local images.
       if [ $? -ne 0 ]; then
         opt="-l"
       fi

@@ -17,14 +17,15 @@
 #include "modules/dreamview/backend/hmi/hmi_worker.h"
 
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "cyber/common/file.h"
 #include "modules/common/adapters/adapter_gflags.h"
 #include "modules/common/configs/config_gflags.h"
 #include "modules/common/kv_db/kv_db.h"
+#include "modules/common/util/future.h"
 #include "modules/common/util/map_util.h"
 #include "modules/common/util/message_util.h"
-#include "modules/common/util/string_util.h"
 #include "modules/dreamview/backend/common/dreamview_gflags.h"
 #include "modules/dreamview/backend/hmi/vehicle_manager.h"
 #include "modules/monitor/proto/system_status.pb.h"
@@ -53,7 +54,6 @@ using apollo::canbus::Chassis;
 using apollo::common::DriveEvent;
 using apollo::common::KVDB;
 using apollo::common::time::Clock;
-using apollo::common::util::StrCat;
 using apollo::control::DrivingAction;
 using apollo::cyber::Node;
 using apollo::monitor::ComponentStatus;
@@ -65,7 +65,7 @@ using WLock = boost::unique_lock<boost::shared_mutex>;
 constexpr char kNavigationModeName[] = "Navigation";
 
 // Convert a string to be title-like. E.g.: "hello_world" -> "Hello World".
-std::string TitleCase(const std::string& origin) {
+std::string TitleCase(std::string_view origin) {
   std::vector<std::string> parts = absl::StrSplit(origin, '_');
   for (auto& part : parts) {
     if (!part.empty()) {
@@ -74,7 +74,7 @@ std::string TitleCase(const std::string& origin) {
     }
   }
 
-  return apollo::common::util::PrintIter(parts);
+  return absl::StrJoin(parts, " ");
 }
 
 // List subdirs and return a dict of {subdir_title: subdir_path}.
@@ -83,17 +83,17 @@ Map<std::string, std::string> ListDirAsDict(const std::string& dir) {
   const auto subdirs = cyber::common::ListSubPaths(dir);
   for (const auto& subdir : subdirs) {
     const auto subdir_title = TitleCase(subdir);
-    const auto subdir_path = StrCat(dir, "/", subdir);
+    const auto subdir_path = absl::StrCat(dir, "/", subdir);
     result.insert({subdir_title, subdir_path});
   }
   return result;
 }
 
 // List files by pattern and return a dict of {file_title: file_path}.
-Map<std::string, std::string> ListFilesAsDict(const std::string& dir,
-                                              const std::string& extension) {
+Map<std::string, std::string> ListFilesAsDict(std::string_view dir,
+                                              std::string_view extension) {
   Map<std::string, std::string> result;
-  const std::string pattern = StrCat(dir, "/*", extension);
+  const std::string pattern = absl::StrCat(dir, "/*", extension);
   for (const std::string& file_path : cyber::common::Glob(pattern)) {
     // Remove the extension and convert to title case as the file title.
     const std::string filename = cyber::common::GetFileName(file_path);
@@ -105,7 +105,7 @@ Map<std::string, std::string> ListFilesAsDict(const std::string& dir,
 }
 
 template <class FlagType, class ValueType>
-void SetGlobalFlag(const std::string& flag_name, const ValueType& value,
+void SetGlobalFlag(std::string_view flag_name, const ValueType& value,
                    FlagType* flag) {
   static constexpr char kGlobalFlagfile[] =
       "/apollo/modules/common/data/global_flagfile.txt";
@@ -118,8 +118,8 @@ void SetGlobalFlag(const std::string& flag_name, const ValueType& value,
   }
 }
 
-void System(const std::string& cmd) {
-  const int ret = std::system(cmd.c_str());
+void System(std::string_view cmd) {
+  const int ret = std::system(cmd.data());
   if (ret == 0) {
     AINFO << "SUCCESS: " << cmd;
   } else {
@@ -196,7 +196,7 @@ HMIMode HMIWorker::LoadMode(const std::string& mode_config_path) {
 
     // Construct stop_command: pkill -f '<dag[0]>'
     const std::string& first_dag = cyber_module.dag_files(0);
-    module.set_stop_command(StrCat("pkill -f \"", first_dag, "\""));
+    module.set_stop_command(absl::StrCat("pkill -f \"", first_dag, "\""));
     // Construct process_monitor_config.
     module.mutable_process_monitor_config()->add_command_keywords("mainboard");
     module.mutable_process_monitor_config()->add_command_keywords(first_dag);
@@ -237,7 +237,8 @@ void HMIWorker::InitStatus() {
   //   2. CachedMode if it's stored in KV database.
   //   3. default_hmi_mode if it is available.
   //   4. Pick the first available mode.
-  const std::string cached_mode = KVDB::Get(FLAGS_current_mode_db_key);
+  const std::string cached_mode =
+      KVDB::Get(FLAGS_current_mode_db_key).value_or("");
   if (FLAGS_use_navigation_mode && ContainsKey(modes, kNavigationModeName)) {
     ChangeMode(kNavigationModeName);
   } else if (ContainsKey(modes, cached_mode)) {
@@ -404,8 +405,8 @@ bool HMIWorker::ChangeDrivingMode(const Chassis::DrivingMode mode) {
       return false;
   }
 
-  constexpr int kMaxTries = 3;
-  constexpr auto kTryInterval = std::chrono::milliseconds(500);
+  static constexpr int kMaxTries = 3;
+  static constexpr auto kTryInterval = std::chrono::milliseconds(500);
   for (int i = 0; i < kMaxTries; ++i) {
     // Send driving action periodically until entering target driving mode.
     common::util::FillHeader("HMI", pad.get());

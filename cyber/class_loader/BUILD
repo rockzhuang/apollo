@@ -26,12 +26,8 @@ cc_library(
 
 cc_library(
     name = "class_loader_manager",
-    srcs = [
-        "class_loader_manager.cc",
-    ],
-    hdrs = [
-        "class_loader_manager.h",
-    ],
+    srcs = ["class_loader_manager.cc"],
+    hdrs = ["class_loader_manager.h"],
     deps = [
         ":class_loader",
     ],

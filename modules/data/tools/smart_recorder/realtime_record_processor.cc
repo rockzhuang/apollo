@@ -56,7 +56,7 @@ using cyber::record::RecordReader;
 using cyber::record::RecordViewer;
 
 std::string GetNextRecordFileName(const std::string& record_path) {
-  constexpr int kSuffixLen = 5;
+  static constexpr int kSuffixLen = 5;
   const std::string kInitialSequence = "00000";
   if (record_path.empty()) {
     return kInitialSequence;
@@ -64,10 +64,9 @@ std::string GetNextRecordFileName(const std::string& record_path) {
   std::stringstream record_suffix;
   record_suffix.fill('0');
   record_suffix.width(kSuffixLen);
-  record_suffix << std::to_string(
-      std::stoi(
-          record_path.substr(record_path.size() - kSuffixLen, kSuffixLen)) +
-      1);
+  record_suffix << std::stoi(record_path.substr(record_path.size() - kSuffixLen,
+                                                kSuffixLen)) +
+                       1;
   return record_suffix.str();
 }
 
@@ -115,8 +114,7 @@ bool RealtimeRecordProcessor::Init(const SmartRecordTrigger& trigger_conf) {
   }
   // Init recorder
   cyber::Init("smart_recorder");
-  smart_recorder_node_ =
-      CreateNode(absl::StrCat("smart_recorder_", std::to_string(getpid())));
+  smart_recorder_node_ = CreateNode(absl::StrCat("smart_recorder_", getpid()));
   if (smart_recorder_node_ == nullptr) {
     AERROR << "create smart recorder node failed: " << getpid();
     return false;
@@ -198,7 +196,7 @@ void RealtimeRecordProcessor::MonitorStatus() {
   recorder_->Stop();
   is_terminating_ = true;
   AINFO << "wait for a while trying to complete the restore work";
-  constexpr int kMessageInterval = 1000;
+  static constexpr int kMessageInterval = 1000;
   int interval_counter = 0;
   while (++interval_counter * kMessageInterval < recorder_wait_time_) {
     MonitorManager::Instance()->LogBuffer().WARN(

@@ -31,6 +31,15 @@ class ResourceMonitor : public RecurrentRunner {
   static void UpdateStatus(
       const apollo::dreamview::ResourceMonitorConfig& config,
       ComponentStatus* status);
+  static void CheckDiskSpace(
+      const apollo::dreamview::ResourceMonitorConfig& config,
+      ComponentStatus* status);
+  static void CheckCPUUsage(
+      const int pid, const apollo::dreamview::ResourceMonitorConfig& config,
+      ComponentStatus* status);
+  static void CheckMemoryUsage(
+      const int pid, const apollo::dreamview::ResourceMonitorConfig& config,
+      ComponentStatus* status);
 };
 
 }  // namespace monitor

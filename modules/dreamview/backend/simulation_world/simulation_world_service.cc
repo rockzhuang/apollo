@@ -48,7 +48,6 @@ using apollo::common::VehicleConfigHelper;
 using apollo::common::monitor::MonitorMessage;
 using apollo::common::monitor::MonitorMessageItem;
 using apollo::common::time::Clock;
-using apollo::common::time::millis;
 using apollo::common::util::DownsampleByAngle;
 using apollo::common::util::FillHeader;
 using apollo::control::ControlCommand;
@@ -372,8 +371,7 @@ void SimulationWorldService::Update() {
   UpdateLatencies();
 
   world_.set_sequence_num(world_.sequence_num() + 1);
-  world_.set_timestamp(
-      static_cast<double>(apollo::common::time::AsInt64<millis>(Clock::Now())));
+  world_.set_timestamp(static_cast<double>(absl::ToUnixMillis(Clock::Now())));
 }
 
 void SimulationWorldService::UpdateDelays() {
@@ -415,7 +413,7 @@ Json SimulationWorldService::GetUpdateAsJson(double radius) const {
 
   Json update;
   update["type"] = "SimWorldUpdate";
-  update["timestamp"] = apollo::common::time::AsInt64<millis>(Clock::Now());
+  update["timestamp"] = absl::ToUnixMillis(Clock::Now());
   update["world"] = sim_world_json_string;
 
   return update;
@@ -1004,35 +1002,6 @@ void SimulationWorldService::UpdatePlanningData(const PlanningData &data) {
     world_.mutable_traffic_signal()->set_current_signal(
         TrafficLight_Color_Name(current_signal));
   }
-
-  // Update planning signal
-  world_.clear_traffic_signal();
-  if (data.has_signal_light() && data.signal_light().signal_size() > 0) {
-    TrafficLight::Color current_signal = TrafficLight::UNKNOWN;
-    int green_light_count = 0;
-
-    for (auto &signal : data.signal_light().signal()) {
-      switch (signal.color()) {
-        case TrafficLight::RED:
-        case TrafficLight::YELLOW:
-        case TrafficLight::BLACK:
-          current_signal = signal.color();
-          break;
-        case TrafficLight::GREEN:
-          green_light_count++;
-          break;
-        default:
-          break;
-      }
-    }
-
-    if (green_light_count == data.signal_light().signal_size()) {
-      current_signal = TrafficLight::GREEN;
-    }
-
-    world_.mutable_traffic_signal()->set_current_signal(
-        TrafficLight_Color_Name(current_signal));
-  }
 }
 
 template <>
@@ -1071,6 +1040,17 @@ void SimulationWorldService::CreatePredictionTrajectory(
       PolygonPoint *world_point = prediction->add_predicted_trajectory();
       world_point->set_x(point.x() + map_service_->GetXOffset());
       world_point->set_y(point.y() + map_service_->GetYOffset());
+
+      const TrajectoryPoint &traj_point = traj.trajectory_point(index);
+      if (traj_point.has_gaussian_info()) {
+        const apollo::common::GaussianInfo &gaussian =
+            traj_point.gaussian_info();
+
+        auto *ellipse = world_point->mutable_gaussian_info();
+        ellipse->set_ellipse_a(gaussian.ellipse_a());
+        ellipse->set_ellipse_b(gaussian.ellipse_b());
+        ellipse->set_theta_a(gaussian.theta_a());
+      }
     }
   }
 }

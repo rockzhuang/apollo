@@ -34,7 +34,7 @@ DEFINE_string(lateral_controller_conf_file,
 
 DEFINE_string(
     longitudinal_controller_conf_file,
-    "/apollo/modules/control/conf/longitudinal_controller_conf_file.pb.txt",
+    "/apollo/modules/control/conf/longitudinal_controller_conf.pb.txt",
     "longitudinal controller conf data file");
 
 DEFINE_string(calibration_table_file,
@@ -46,17 +46,16 @@ DEFINE_bool(enable_speed_station_preview, true, "enable speed/station preview");
 
 DEFINE_string(control_node_name, "control", "The control node name in proto");
 
-DEFINE_string(mpc_controller_submodule_name, "MPC controller",
+DEFINE_string(mpc_controller_submodule_name, "MPCControllerSubmodule",
               "MPC controller node name in proto");
 
-DEFINE_string(lat_lon_controller_submodule_name,
-              "lateral+longitudinal controller",
+DEFINE_string(lat_lon_controller_submodule_name, "LatLonControllerSubmodule",
               "lateral+longitudinal controller node name in proto");
 
-DEFINE_string(preprocessor_submodule_name, "preprocessor submodule",
+DEFINE_string(preprocessor_submodule_name, "PreprocessorSubmodule",
               "preprocessor submodule name in proto");
 
-DEFINE_string(postprocessor_submodule_name, "postprocessor submodule",
+DEFINE_string(postprocessor_submodule_name, "PostprocessorSubmodule",
               "postprocessor submodule name in proto");
 
 DEFINE_bool(is_control_test_mode, false, "True to run control in test mode");
@@ -116,3 +115,6 @@ DEFINE_bool(
     "Enable estop to prevent following negative speed during gear drive");
 
 DEFINE_bool(use_osqp_solver, false, "use OSQP solver for MPC controller");
+
+DEFINE_bool(use_control_submodules, false,
+            "use control submodules instead of controller agent");

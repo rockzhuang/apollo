@@ -24,33 +24,6 @@ namespace apollo {
 namespace common {
 namespace util {
 
-TEST(StringUtilTest, IterPrinter) {
-  // Container.
-  std::vector<std::string> vec;
-  EXPECT_EQ("", PrintIter(vec));  // Empty string
-  vec.assign({"0", "1", "2"});
-  EXPECT_EQ("0 1 2", PrintIter(vec));
-  EXPECT_EQ("0|1|2", PrintIter(vec, "|"));
-  EXPECT_EQ("0, 1, 2", PrintIter(vec.begin(), vec.end(), ", "));
-  EXPECT_EQ("1", PrintIter(vec.begin() + 1, vec.end() - 1, " "));
-
-  // Array.
-  int data[] = {0, 1, 2};
-  EXPECT_EQ("0 1 2", PrintIter(data));
-  EXPECT_EQ("0, 1", PrintIter(data, data + 2, ", "));
-  EXPECT_EQ("1", PrintIter(data + 1, data + 2, ", "));
-}
-
-TEST(StringUtilTest, DecodeBase64) {
-  EXPECT_EQ("", DecodeBase64(""));
-  EXPECT_EQ("f", DecodeBase64("Zg=="));
-  EXPECT_EQ("fo", DecodeBase64("Zm8="));
-  EXPECT_EQ("foo", DecodeBase64("Zm9v"));
-  EXPECT_EQ("foob", DecodeBase64("Zm9vYg=="));
-  EXPECT_EQ("fooba", DecodeBase64("Zm9vYmE="));
-  EXPECT_EQ("foobar", DecodeBase64("Zm9vYmFy"));
-}
-
 TEST(StringUtilTest, EncodeBase64) {
   EXPECT_EQ("", EncodeBase64(""));
   EXPECT_EQ("Zg==", EncodeBase64("f"));

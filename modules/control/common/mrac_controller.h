@@ -25,6 +25,7 @@
 
 #include "Eigen/Core"
 
+#include "modules/common/configs/proto/vehicle_config.pb.h"
 #include "modules/common/status/status.h"
 #include "modules/control/proto/mrac_conf.pb.h"
 
@@ -44,9 +45,11 @@ class MracController {
   /**
    * @brief initialize mrac controller
    * @param mrac_conf configuration for mrac controller
+   * @param latency_param configuration for latency parameter
    * @param dt sampling time interval
    */
-  void Init(const MracConf &mrac_conf, const double dt);
+  void Init(const MracConf &mrac_conf,
+            const common::LatencyParam &latency_param, const double dt);
 
   /**
    * time constant, natural frequency and damping ratio
@@ -86,6 +89,13 @@ class MracController {
    */
   bool CheckLyapunovPD(const Eigen::MatrixXd matrix_a,
                        const Eigen::MatrixXd matrix_p) const;
+
+  /**
+   * @brief estimate the initial states of the adaptive gains via known
+   * actuation dynamics approximation
+   * @param latency_param configuration for actuation latency parameters
+   */
+  void EstimateInitialGains(const common::LatencyParam &latency_param);
 
   /**
    * @brief execute the reference state interation with respect to the designed
@@ -226,19 +236,25 @@ class MracController {
    * @brief get current state for reference system
    * @return current state
    */
-  double CurrentReferenceState() const;
+  Eigen::MatrixXd CurrentReferenceState() const;
 
   /**
-   * @brief get current state adaptive gain for reference system
+   * @brief get current state adaptive gain for mrac control
    * @return current state adaptive gain
    */
-  double CurrentStateAdaptionGain() const;
+  Eigen::MatrixXd CurrentStateAdaptionGain() const;
 
   /**
-   * @brief get current input adaptive gain for reference system
+   * @brief get current input adaptive gain for mrac control
    * @return current input adaptive gain
    */
-  double CurrentInputAdaptionGain() const;
+  Eigen::MatrixXd CurrentInputAdaptionGain() const;
+
+  /**
+   * @brief get current nonlinear adaptive gain for mrac control
+   * @return current nonlinear adaptive gain
+   */
+  Eigen::MatrixXd CurrentNonlinearAdaptionGain() const;
 
  protected:
   // indicator if the reference/adaption model is valid

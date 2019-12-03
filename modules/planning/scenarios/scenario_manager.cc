@@ -21,11 +21,11 @@
 #include <utility>
 #include <vector>
 
-#include "modules/map/proto/map_lane.pb.h"
-
 #include "modules/common/configs/vehicle_config_helper.h"
+#include "modules/common/util/point_factory.h"
 #include "modules/common/vehicle_state/vehicle_state_provider.h"
 #include "modules/map/pnc_map/path.h"
+#include "modules/map/proto/map_lane.pb.h"
 #include "modules/planning/common/planning_context.h"
 #include "modules/planning/common/planning_gflags.h"
 #include "modules/planning/common/util/util.h"
@@ -176,16 +176,6 @@ void ScenarioManager::RegisterScenarios() {
                              &config_map_[ScenarioConfig::YIELD_SIGN]));
 }
 
-ScenarioConfig::ScenarioType ScenarioManager::SelectChangeLaneScenario(
-    const Frame& frame) {
-  if (frame.reference_line_info().size() > 1) {
-    // TODO(all): to be implemented
-    return default_scenario_type_;
-  }
-
-  return default_scenario_type_;
-}
-
 ScenarioConfig::ScenarioType ScenarioManager::SelectPullOverScenario(
     const Frame& frame) {
   const auto& scenario_config =
@@ -225,7 +215,7 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectPullOverScenario(
 
   // check around junction
   if (pull_over_scenario) {
-    constexpr double kDistanceToAvoidJunction = 8.0;  // meter
+    static constexpr double kDistanceToAvoidJunction = 8.0;  // meter
     for (const auto& overlap : first_encountered_overlap_map_) {
       if (overlap.first == ReferenceLineInfo::PNC_JUNCTION ||
           overlap.first == ReferenceLineInfo::SIGNAL ||
@@ -246,7 +236,7 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectPullOverScenario(
   // check rightmost driving lane along pull-over path
   if (pull_over_scenario) {
     double check_s = adc_front_edge_s;
-    constexpr double kDistanceUnit = 5.0;
+    static constexpr double kDistanceUnit = 5.0;
     while (check_s < dest_sl.s()) {
       check_s += kDistanceUnit;
 
@@ -296,7 +286,6 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectPullOverScenario(
       break;
     case ScenarioConfig::BARE_INTERSECTION_UNPROTECTED:
     case ScenarioConfig::EMERGENCY_PULL_OVER:
-    case ScenarioConfig::CHANGE_LANE:
     case ScenarioConfig::PARK_AND_GO:
     case ScenarioConfig::PULL_OVER:
     case ScenarioConfig::STOP_SIGN_PROTECTED:
@@ -374,7 +363,7 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectInterceptionScenario(
 
   // pick a closer one between consecutive bare_intersection and traffic_sign
   if (traffic_sign_overlap && pnc_junction_overlap) {
-    constexpr double kJunctionDelta = 10.0;
+    static constexpr double kJunctionDelta = 10.0;
     double s_diff = std::fabs(traffic_sign_overlap->start_s -
                               pnc_junction_overlap->start_s);
     if (s_diff >= kJunctionDelta) {
@@ -440,7 +429,6 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectStopSignScenario(
 
   switch (current_scenario_->scenario_type()) {
     case ScenarioConfig::LANE_FOLLOW:
-    case ScenarioConfig::CHANGE_LANE:
     case ScenarioConfig::PARK_AND_GO:
     case ScenarioConfig::PULL_OVER:
       if (stop_sign_scenario) {
@@ -489,7 +477,7 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectTrafficLightScenario(
   // find all the traffic light belong to
   // the same group as first encountered traffic light
   std::vector<hdmap::PathOverlap> next_traffic_lights;
-  constexpr double kTrafficLightGroupingMaxDist = 2.0;  // unit: m
+  static constexpr double kTrafficLightGroupingMaxDist = 2.0;  // unit: m
   const std::vector<PathOverlap>& traffic_light_overlaps =
       reference_line_info.reference_line().map_path().signal_overlaps();
   for (const auto& traffic_light_overlap : traffic_light_overlaps) {
@@ -575,7 +563,6 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectTrafficLightScenario(
 
   switch (current_scenario_->scenario_type()) {
     case ScenarioConfig::LANE_FOLLOW:
-    case ScenarioConfig::CHANGE_LANE:
     case ScenarioConfig::PARK_AND_GO:
     case ScenarioConfig::PULL_OVER:
       if (traffic_light_unprotected_left_turn_scenario) {
@@ -629,7 +616,6 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectYieldSignScenario(
 
   switch (current_scenario_->scenario_type()) {
     case ScenarioConfig::LANE_FOLLOW:
-    case ScenarioConfig::CHANGE_LANE:
     case ScenarioConfig::PARK_AND_GO:
     case ScenarioConfig::PULL_OVER:
       if (yield_sign_scenario) {
@@ -684,7 +670,6 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectBareIntersectionScenario(
 
   switch (current_scenario_->scenario_type()) {
     case ScenarioConfig::LANE_FOLLOW:
-    case ScenarioConfig::CHANGE_LANE:
     case ScenarioConfig::PARK_AND_GO:
     case ScenarioConfig::PULL_OVER:
       if (bare_junction_scenario) {
@@ -733,13 +718,11 @@ ScenarioConfig::ScenarioType ScenarioManager::SelectParkAndGoScenario(
   bool park_and_go = false;
   const auto& scenario_config =
       config_map_[ScenarioConfig::PARK_AND_GO].park_and_go_config();
-  common::VehicleState vehicle_state =
-      common::VehicleStateProvider::Instance()->vehicle_state();
-  auto adc_point = common::util::MakePointENU(
-      vehicle_state.x(), vehicle_state.y(), vehicle_state.z());
+  const auto vehicle_state_provider = common::VehicleStateProvider::Instance();
+  common::VehicleState vehicle_state = vehicle_state_provider->vehicle_state();
+  auto adc_point = common::util::PointFactory::ToPointENU(vehicle_state);
   // TODO(SHU) might consider gear == GEAR_PARKING
-  double adc_speed =
-      common::VehicleStateProvider::Instance()->linear_velocity();
+  double adc_speed = vehicle_state_provider->linear_velocity();
   double s = 0.0;
   double l = 0.0;
   const double max_abs_speed_when_stopped =
@@ -821,7 +804,6 @@ void ScenarioManager::ScenarioDispatch(const common::TrajectoryPoint& ego_point,
     // check current_scenario (not switchable)
     switch (current_scenario_->scenario_type()) {
       case ScenarioConfig::LANE_FOLLOW:
-      case ScenarioConfig::CHANGE_LANE:
       case ScenarioConfig::PULL_OVER:
         break;
       case ScenarioConfig::BARE_INTERSECTION_UNPROTECTED:
@@ -857,12 +839,6 @@ void ScenarioManager::ScenarioDispatch(const common::TrajectoryPoint& ego_point,
   // intersection scenarios
   if (scenario_type == default_scenario_type_) {
     scenario_type = SelectInterceptionScenario(frame);
-  }
-
-  ////////////////////////////////////////
-  // CHANGE_LANE scenario
-  if (scenario_type == default_scenario_type_) {
-    scenario_type = SelectChangeLaneScenario(frame);
   }
 
   ////////////////////////////////////////
@@ -1051,7 +1027,7 @@ void ScenarioManager::UpdatePlanningContextTrafficLightScenario(
     return;
   }
 
-  constexpr double kTrafficLightGroupingMaxDist = 2.0;  // unit: m
+  static constexpr double kTrafficLightGroupingMaxDist = 2.0;  // unit: m
   const double current_traffic_light_overlap_start_s =
       traffic_light_overlap_itr->start_s;
   for (const auto& traffic_light_overlap : traffic_light_overlaps) {
@@ -1118,7 +1094,7 @@ void ScenarioManager::UpdatePlanningContextYieldSignScenario(
     return;
   }
 
-  constexpr double kTrafficLightGroupingMaxDist = 2.0;  // unit: m
+  static constexpr double kTrafficLightGroupingMaxDist = 2.0;  // unit: m
   const double current_yield_sign_overlap_start_s =
       yield_sign_overlap_itr->start_s;
   for (const auto& yield_sign_overlap : yield_sign_overlaps) {
@@ -1176,7 +1152,7 @@ void ScenarioManager::UpdatePlanningContextPullOverScenario(
           {pull_over_status.position().x(), pull_over_status.position().y()},
           &pull_over_sl);
 
-      constexpr double kDestMaxDelta = 30.0;  // meter
+      static constexpr double kDestMaxDelta = 30.0;  // meter
       if (std::fabs(dest_sl.s() - pull_over_sl.s()) > kDestMaxDelta) {
         PlanningContext::Instance()
             ->mutable_planning_status()

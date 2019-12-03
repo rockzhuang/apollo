@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <set>
 #include <string>
 #include <tuple>
@@ -26,9 +27,9 @@
 #include <utility>
 #include <vector>
 
+#include "absl/strings/str_cat.h"
 #include "modules/common/configs/vehicle_config_helper.h"
-#include "modules/common/util/string_util.h"
-#include "modules/common/util/util.h"
+#include "modules/common/util/point_factory.h"
 #include "modules/map/hdmap/hdmap_util.h"
 #include "modules/planning/common/path_boundary.h"
 #include "modules/planning/common/planning_context.h"
@@ -41,8 +42,9 @@ namespace planning {
 using apollo::common::ErrorCode;
 using apollo::common::Status;
 using apollo::common::VehicleConfigHelper;
-using apollo::common::util::StrCat;
 using apollo::hdmap::HDMapUtil;
+using apollo::hdmap::JunctionInfo;
+using apollo::hdmap::PNCJunctionInfo;
 
 namespace {
 // PathBoundPoint contains: (s, l_min, l_max).
@@ -247,7 +249,7 @@ Status PathBoundsDecider::Process(
     }
     // RecordDebugInfo(regular_path_bound, "", reference_line_info);
     candidate_path_boundaries.back().set_label(
-        StrCat("regular/", path_label, "/", borrow_lane_type));
+        absl::StrCat("regular/", path_label, "/", borrow_lane_type));
     candidate_path_boundaries.back().set_blocking_obstacle_id(
         blocking_obstacle_id);
   }
@@ -371,6 +373,25 @@ Status PathBoundsDecider::GenerateLaneChangePathBound(
 
   // 3. Remove the S-length of target lane out of the path-bound.
   GetBoundaryFromLaneChangeForbiddenZone(reference_line_info, path_bound);
+
+  PathBound temp_path_bound = *path_bound;
+  std::string blocking_obstacle_id;
+  if (!GetBoundaryFromStaticObstacles(reference_line_info.path_decision(),
+                                      path_bound, &blocking_obstacle_id)) {
+    const std::string msg =
+        "Failed to decide fine tune the boundaries after "
+        "taking into consideration all static obstacles.";
+    AERROR << msg;
+    return Status(ErrorCode::PLANNING_ERROR, msg);
+  }
+  // Append some extra path bound points to avoid zero-length path data.
+  int counter = 0;
+  while (!blocking_obstacle_id.empty() &&
+         path_bound->size() < temp_path_bound.size() &&
+         counter < kNumExtraTailBoundPoint) {
+    path_bound->push_back(temp_path_bound[path_bound->size()]);
+    counter++;
+  }
 
   ADEBUG << "Completed generating path boundaries.";
   return Status::OK();
@@ -583,8 +604,10 @@ bool PathBoundsDecider::FindEmergencyPullOverS(
                                      ->GetConfig()
                                      .vehicle_param()
                                      .min_turn_radius();
-  constexpr double kAdjustFactor = 2.0;
-  const double pull_over_distance = min_turn_radius * 2 * kAdjustFactor;
+  const double adjust_factor =
+      config_.path_bounds_decider_config()
+          .pull_over_approach_lon_distance_adjust_factor();
+  const double pull_over_distance = min_turn_radius * 2 * adjust_factor;
   *pull_over_s = adc_end_s + pull_over_distance;
 
   return true;
@@ -650,6 +673,7 @@ bool PathBoundsDecider::SearchPullOverPosition(
       VehicleConfigHelper::GetConfig().vehicle_param().width() / 2.0;
 
   // 2. Find a window that is close to road-edge.
+  // (not in any intersection)
   bool has_a_feasible_window = false;
   while ((search_backward && idx >= 0 &&
           std::get<0>(path_bound[idx]) - std::get<0>(path_bound.front()) >
@@ -659,6 +683,28 @@ bool PathBoundsDecider::SearchPullOverPosition(
               pull_over_space_length)) {
     int j = idx;
     bool is_feasible_window = true;
+
+    // Check if the point of idx is within intersection.
+    double pt_ref_line_s = std::get<0>(path_bound[idx]);
+    double pt_ref_line_l = 0.0;
+    common::SLPoint pt_sl;
+    pt_sl.set_s(pt_ref_line_s);
+    pt_sl.set_l(pt_ref_line_l);
+    common::math::Vec2d pt_xy;
+    reference_line_info.reference_line().SLToXY(pt_sl, &pt_xy);
+    common::PointENU hdmap_point;
+    hdmap_point.set_x(pt_xy.x());
+    hdmap_point.set_y(pt_xy.y());
+    ADEBUG << "Pull-over position might be around (" << pt_xy.x() << ", "
+           << pt_xy.y() << ")";
+    std::vector<std::shared_ptr<const JunctionInfo>> junctions;
+    HDMapUtil::BaseMap().GetJunctions(hdmap_point, 1.0, &junctions);
+    if (!junctions.empty()) {
+      AWARN << "Point is in PNC-junction.";
+      idx = search_backward ? idx - 1 : idx + 1;
+      continue;
+    }
+
     while ((search_backward && j >= 0 &&
             std::get<0>(path_bound[idx]) - std::get<0>(path_bound[j]) <
                 pull_over_space_length) ||
@@ -671,6 +717,9 @@ bool PathBoundsDecider::SearchPullOverPosition(
       double curr_road_right_width = 0;
       reference_line_info.reference_line().GetRoadWidth(
           curr_s, &curr_road_left_width, &curr_road_right_width);
+      ADEBUG << "At s = " << curr_s
+             << ", the road left width = " << curr_road_left_width
+             << ", and the road right width = " << curr_road_right_width;
       if (curr_road_right_width - (curr_right_bound + adc_half_width) >
           config_.path_bounds_decider_config().pull_over_road_edge_buffer()) {
         AERROR << "Not close enough to road-edge. Not feasible for pull-over.";
@@ -734,7 +783,8 @@ bool PathBoundsDecider::SearchPullOverPosition(
       hdmap::LaneInfoConstPtr lane;
       double s = 0.0;
       double l = 0.0;
-      auto point = common::util::MakePointENU(pull_over_x, pull_over_y, 0.0);
+      auto point =
+          common::util::PointFactory::ToPointENU(pull_over_x, pull_over_y);
       if (HDMapUtil::BaseMap().GetNearestLaneWithHeading(
               point, 5.0, pull_over_theta, M_PI_2, &lane, &s, &l) == 0) {
         pull_over_theta = lane->Heading(s);
@@ -797,7 +847,6 @@ void PathBoundsDecider::RemoveRedundantPathBoundaries(
       break;
     }
   }
-  return;
 }
 
 bool PathBoundsDecider::IsContained(
@@ -1005,7 +1054,7 @@ bool PathBoundsDecider::GetBoundaryFromADC(
   CHECK(!path_bound->empty());
 
   // Calculate the ADC's lateral boundary.
-  constexpr double kMaxLateralAccelerations = 1.5;
+  static constexpr double kMaxLateralAccelerations = 1.5;
   double ADC_lat_decel_buffer = (adc_frenet_ld_ > 0 ? 1.0 : -1.0) *
                                 adc_frenet_ld_ * adc_frenet_ld_ /
                                 kMaxLateralAccelerations / 2.0;
@@ -1101,7 +1150,7 @@ bool PathBoundsDecider::GetBoundaryFromLanesAndADC(
 
     // 3. Calculate the proper boundary based on lane-width, ADC's position,
     //    and ADC's velocity.
-    constexpr double kMaxLateralAccelerations = 1.5;
+    static constexpr double kMaxLateralAccelerations = 1.5;
     double offset_to_map = 0.0;
     reference_line.GetOffsetToMap(curr_s, &offset_to_map);
 
@@ -1183,6 +1232,11 @@ void PathBoundsDecider::GetBoundaryFromLaneChangeForbiddenZone(
   auto* lane_change_status = PlanningContext::Instance()
                                  ->mutable_planning_status()
                                  ->mutable_change_lane();
+  if (lane_change_status->is_clear_to_change_lane()) {
+    ADEBUG << "Current position is clear to change lane. No need prep s.";
+    lane_change_status->set_exist_lane_change_start_position(false);
+    return;
+  }
   double lane_change_start_s = 0.0;
   if (lane_change_status->exist_lane_change_start_position()) {
     common::SLPoint point_sl;
@@ -1258,6 +1312,7 @@ bool PathBoundsDecider::GetBoundaryFromStaticObstacles(
   // Preprocessing.
   auto indexed_obstacles = path_decision.obstacles();
   auto sorted_obstacles = SortObstaclesForSweepLine(indexed_obstacles);
+  ADEBUG << "There are " << sorted_obstacles.size() << " obstacles.";
   double center_line = adc_frenet_l_;
   size_t obs_idx = 0;
   int path_blocked_idx = -1;
@@ -1634,7 +1689,7 @@ double PathBoundsDecider::GetBufferBetweenADCCenterAndEdge() {
       VehicleConfigHelper::GetConfig().vehicle_param().width() / 2.0;
   // TODO(all): currently it's a fixed number. But it can take into account many
   // factors such as: ADC length, possible turning angle, speed, etc.
-  constexpr double kAdcEdgeBuffer = 0.0;
+  static constexpr double kAdcEdgeBuffer = 0.0;
 
   return (adc_half_width + kAdcEdgeBuffer);
 }
@@ -1784,8 +1839,6 @@ void PathBoundsDecider::RecordDebugInfo(
   ptr_display_path_2->mutable_path_point()->CopyFrom(
       {right_path_data.discretized_path().begin(),
        right_path_data.discretized_path().end()});
-
-  return;
 }
 
 }  // namespace planning

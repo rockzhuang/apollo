@@ -23,13 +23,13 @@
 #include <algorithm>
 #include <utility>
 
-#include "modules/perception/proto/perception_obstacle.pb.h"
-
 #include "cyber/common/log.h"
 #include "modules/common/configs/vehicle_config_helper.h"
 #include "modules/common/time/time.h"
+#include "modules/common/util/point_factory.h"
 #include "modules/common/vehicle_state/vehicle_state_provider.h"
 #include "modules/map/pnc_map/path.h"
+#include "modules/perception/proto/perception_obstacle.pb.h"
 #include "modules/planning/common/frame.h"
 #include "modules/planning/common/planning_context.h"
 #include "modules/planning/common/util/util.h"
@@ -76,7 +76,7 @@ Stage::StageStatus StopSignUnprotectedStagePreStop::Process(
     return FinishScenario();
   }
 
-  constexpr double kPassStopLineBuffer = 0.3;  // unit: m
+  static constexpr double kPassStopLineBuffer = 0.3;  // unit: m
   const double adc_front_edge_s = reference_line_info.AdcSlBoundary().end_s();
   const double distance_adc_pass_stop_sign =
       adc_front_edge_s - current_stop_sign_overlap->start_s;
@@ -149,9 +149,8 @@ int StopSignUnprotectedStagePreStop::AddWatchVehicle(
     return 0;
   }
 
-  auto point = common::util::MakePointENU(perception_obstacle.position().x(),
-                                          perception_obstacle.position().y(),
-                                          perception_obstacle.position().z());
+  const auto point =
+      common::util::PointFactory::ToPointENU(perception_obstacle.position());
   double obstacle_s = 0.0;
   double obstacle_l = 0.0;
   LaneInfoConstPtr obstacle_lane;

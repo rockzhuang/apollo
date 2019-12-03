@@ -26,6 +26,8 @@
 
 #include "boost/math/tools/minima.hpp"
 
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "cyber/common/log.h"
 #include "modules/common/math/angle.h"
 #include "modules/common/math/cartesian_frenet_conversion.h"
@@ -94,7 +96,7 @@ bool ReferenceLine::Stitch(const ReferenceLine& other) {
   const auto& accumulated_s = other.map_path().accumulated_s();
   const auto& other_points = other.reference_points();
   auto lower = accumulated_s.begin();
-  constexpr double kStitchingError = 1e-1;
+  static constexpr double kStitchingError = 1e-1;
   if (first_join) {
     if (first_sl.l() > kStitchingError) {
       AERROR << "lateral stitching error on first join of reference line too "
@@ -759,10 +761,11 @@ std::string ReferenceLine::DebugString() const {
   const auto limit =
       std::min(reference_points_.size(),
                static_cast<size_t>(FLAGS_trajectory_point_num_for_debug));
-  return apollo::common::util::StrCat(
+  return absl::StrCat(
       "point num:", reference_points_.size(),
-      apollo::common::util::PrintDebugStringIter(
-          reference_points_.begin(), reference_points_.begin() + limit, ""));
+      absl::StrJoin(reference_points_.begin(),
+                    reference_points_.begin() + limit, "",
+                    apollo::common::util::DebugStringFormatter()));
 }
 
 double ReferenceLine::GetSpeedLimitFromS(const double s) const {

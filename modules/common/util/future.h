@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2018 The Apollo Authors. All Rights Reserved.
+ * Copyright 2019 The Apollo Authors. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,30 +14,27 @@
  * limitations under the License.
  *****************************************************************************/
 
-/**
- * @file
- * @brief Nonlinear interpolation functions.
- */
-
 #pragma once
 
-#include "modules/common/proto/pnc_point.pb.h"
+#include "absl/memory/memory.h"
+#include "absl/strings/string_view.h"
+#include "absl/types/optional.h"
+#include "absl/utility/utility.h"
 
-/**
- * @namespace apollo::common::math
- * @brief apollo::common::math
- */
+namespace std {
+// Drop-in replacement for code compliant with future C++ versions.
+// Remove the borrowed items upon upgrading.
 
-namespace apollo {
-namespace common {
-namespace math {
+#if __cplusplus == 201103L
 
-PathPoint SplineInterpolate(const PathPoint &p0, const PathPoint &p1,
-                            const double s);
+// Borrow from C++ 17.
+using absl::optional;
+using absl::string_view;
 
-TrajectoryPoint SplineInterpolate(const TrajectoryPoint &tp0,
-                                  const TrajectoryPoint &tp1, const double t);
+// Borrow from C++ 14.
+using absl::make_integer_sequence;
+using absl::make_unique;
 
-}  // namespace math
-}  // namespace common
-}  // namespace apollo
+#endif
+
+}  // namespace std

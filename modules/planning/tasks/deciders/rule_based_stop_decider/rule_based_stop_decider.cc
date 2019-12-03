@@ -50,9 +50,7 @@ RuleBasedStopDecider::RuleBasedStopDecider(const TaskConfig &config)
 apollo::common::Status RuleBasedStopDecider::Process(
     Frame *const frame, ReferenceLineInfo *const reference_line_info) {
   // 1. Rule_based stop for side pass onto reverse lane
-  if (FLAGS_enable_nonscenario_side_pass) {
-    StopOnSidePass(frame, reference_line_info);
-  }
+  StopOnSidePass(frame, reference_line_info);
 
   // 2. Rule_based stop for urgent lane change
   if (FLAGS_enable_lane_change_urgency_checking) {
@@ -118,12 +116,13 @@ void RuleBasedStopDecider::CheckLaneChangeUrgency(Frame *const frame) {
 
 void RuleBasedStopDecider::AddPathEndStop(
     Frame *const frame, ReferenceLineInfo *const reference_line_info) {
-  const std::string stop_wall_id = "path_end_stop";
-  std::vector<std::string> wait_for_obstacles;
   if (!reference_line_info->path_data().path_label().empty() &&
       reference_line_info->path_data().frenet_frame_path().back().s() -
               reference_line_info->path_data().frenet_frame_path().front().s() <
           FLAGS_short_path_length_threshold) {
+    const std::string stop_wall_id =
+        PATH_END_VO_ID_PREFIX + reference_line_info->path_data().path_label();
+    std::vector<std::string> wait_for_obstacles;
     util::BuildStopDecision(
         stop_wall_id,
         reference_line_info->path_data().frenet_frame_path().back().s() - 5.0,

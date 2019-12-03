@@ -25,8 +25,9 @@
 #include "cyber/task/task.h"
 #include "modules/planning/proto/sl_boundary.pb.h"
 
+#include "absl/strings/str_cat.h"
 #include "modules/common/configs/vehicle_config_helper.h"
-#include "modules/common/util/string_util.h"
+#include "modules/common/util/point_factory.h"
 #include "modules/common/util/util.h"
 #include "modules/map/hdmap/hdmap_common.h"
 #include "modules/map/hdmap/hdmap_util.h"
@@ -42,6 +43,7 @@ using apollo::common::VehicleConfigHelper;
 using apollo::common::VehicleSignal;
 using apollo::common::math::Box2d;
 using apollo::common::math::Vec2d;
+using apollo::common::util::PointFactory;
 
 ReferenceLineInfo::ReferenceLineInfo(const common::VehicleState& vehicle_state,
                                      const TrajectoryPoint& adc_planning_point,
@@ -82,7 +84,7 @@ bool ReferenceLineInfo::Init(const std::vector<const Obstacle*>& obstacles) {
           << " is not on reference line:[0, " << reference_line_.Length()
           << "]";
   }
-  constexpr double kOutOfReferenceLineL = 10.0;  // in meters
+  static constexpr double kOutOfReferenceLineL = 10.0;  // in meters
   if (adc_sl_boundary_.start_l() > kOutOfReferenceLineL ||
       adc_sl_boundary_.end_l() < -kOutOfReferenceLineL) {
     AERROR << "Ego vehicle is too far away from reference line.";
@@ -211,7 +213,7 @@ bool ReferenceLineInfo::GetFirstOverlap(
     hdmap::PathOverlap* path_overlap) {
   CHECK_NOTNULL(path_overlap);
   const double start_s = adc_sl_boundary_.end_s();
-  constexpr double kMaxOverlapRange = 500.0;
+  static constexpr double kMaxOverlapRange = 500.0;
   double overlap_min_s = kMaxOverlapRange;
 
   auto overlap_min_s_iter = path_overlaps.end();
@@ -284,7 +286,7 @@ void ReferenceLineInfo::InitFirstOverlaps() {
 }
 
 bool WithinOverlap(const hdmap::PathOverlap& overlap, double s) {
-  constexpr double kEpsilon = 1e-2;
+  static constexpr double kEpsilon = 1e-2;
   return overlap.start_s - kEpsilon <= s && s <= overlap.end_s + kEpsilon;
 }
 
@@ -552,14 +554,13 @@ bool ReferenceLineInfo::IsNeighborLanePath() const {
 }
 
 std::string ReferenceLineInfo::PathSpeedDebugString() const {
-  return apollo::common::util::StrCat("path_data:", path_data_.DebugString(),
-                                      "speed_data:", speed_data_.DebugString());
+  return absl::StrCat("path_data:", path_data_.DebugString(),
+                      "speed_data:", speed_data_.DebugString());
 }
 
-void ReferenceLineInfo::SetTurnSignal(
+void ReferenceLineInfo::SetTurnSignalBasedOnLaneTurnType(
     common::VehicleSignal* vehicle_signal) const {
   CHECK_NOTNULL(vehicle_signal);
-
   if (vehicle_signal->has_turn_signal() &&
       vehicle_signal->turn_signal() != VehicleSignal::TURN_NONE) {
     return;
@@ -596,11 +597,10 @@ void ReferenceLineInfo::SetTurnSignal(
     } else if (turn == hdmap::Lane::U_TURN) {
       // check left or right by geometry.
       auto start_xy =
-          common::util::MakeVec2d(seg.lane->GetSmoothPoint(seg.start_s));
-      auto middle_xy = common::util::MakeVec2d(
+          PointFactory::ToVec2d(seg.lane->GetSmoothPoint(seg.start_s));
+      auto middle_xy = PointFactory::ToVec2d(
           seg.lane->GetSmoothPoint((seg.start_s + seg.end_s) / 2.0));
-      auto end_xy =
-          common::util::MakeVec2d(seg.lane->GetSmoothPoint(seg.end_s));
+      auto end_xy = PointFactory::ToVec2d(seg.lane->GetSmoothPoint(seg.end_s));
       auto start_to_middle = middle_xy - start_xy;
       auto start_to_end = end_xy - start_xy;
       if (start_to_middle.CrossProd(start_to_end) < 0) {
@@ -626,11 +626,11 @@ void ReferenceLineInfo::ExportVehicleSignal(
     common::VehicleSignal* vehicle_signal) const {
   CHECK_NOTNULL(vehicle_signal);
   *vehicle_signal = vehicle_signal_;
-  SetTurnSignal(vehicle_signal);
+  SetTurnSignalBasedOnLaneTurnType(vehicle_signal);
 }
 
 bool ReferenceLineInfo::ReachedDestination() const {
-  constexpr double kDestinationDeltaS = 0.05;
+  static constexpr double kDestinationDeltaS = 0.05;
   return SDistanceToDestination() <= kDestinationDeltaS;
 }
 
@@ -783,7 +783,7 @@ void ReferenceLineInfo::SetObjectDecisions(
 }
 
 void ReferenceLineInfo::ExportEngageAdvice(EngageAdvice* engage_advice) const {
-  constexpr double kMaxAngleDiff = M_PI / 6.0;
+  static constexpr double kMaxAngleDiff = M_PI / 6.0;
   auto* prev_advice = PlanningContext::Instance()
                           ->mutable_planning_status()
                           ->mutable_engage_advice();
@@ -889,7 +889,7 @@ int ReferenceLineInfo::GetPnCJunction(
   const std::vector<hdmap::PathOverlap>& pnc_junction_overlaps =
       reference_line_.map_path().pnc_junction_overlaps();
 
-  constexpr double kError = 1.0;  // meter
+  static constexpr double kError = 1.0;  // meter
   for (const auto& overlap : pnc_junction_overlaps) {
     if (s >= overlap.start_s - kError && s <= overlap.end_s + kError) {
       *pnc_junction_overlap = overlap;

@@ -19,11 +19,13 @@
 #include <algorithm>
 #include <limits>
 
+#include "absl/strings/str_cat.h"
 #include "google/protobuf/text_format.h"
 
 #include "modules/map/proto/map_id.pb.h"
 
 #include "cyber/common/log.h"
+#include "modules/common/util/point_factory.h"
 #include "modules/common/util/string_util.h"
 #include "modules/common/util/util.h"
 #include "modules/map/hdmap/hdmap_util.h"
@@ -47,7 +49,7 @@ namespace hdmap {
 
 using apollo::common::PointENU;
 using apollo::common::VehicleState;
-using apollo::common::util::MakePointENU;
+using apollo::common::util::PointFactory;
 using apollo::routing::RoutingResponse;
 
 namespace {
@@ -439,11 +441,10 @@ bool PncMap::GetRouteSegments(const VehicleState &vehicle_state,
       ADEBUG << "Failed to convert passage to lane segments.";
       continue;
     }
-    PointENU nearest_point =
-        MakePointENU(adc_state_.x(), adc_state_.y(), adc_state_.z());
-    if (index == passage_index) {
-      nearest_point = adc_waypoint_.lane->GetSmoothPoint(adc_waypoint_.s);
-    }
+    const PointENU nearest_point =
+        index == passage_index
+            ? adc_waypoint_.lane->GetSmoothPoint(adc_waypoint_.s)
+            : PointFactory::ToPointENU(adc_state_);
     common::SLPoint sl;
     LaneWaypoint segment_waypoint;
     if (!segments.GetProjection(nearest_point, &sl, &segment_waypoint)) {
@@ -472,8 +473,7 @@ bool PncMap::GetRouteSegments(const VehicleState &vehicle_state,
     }
     route_segments->back().SetCanExit(passage.can_exit());
     route_segments->back().SetNextAction(passage.change_lane_type());
-    std::string route_segment_id =
-        std::to_string(road_index) + "_" + std::to_string(index);
+    const std::string route_segment_id = absl::StrCat(road_index, "_", index);
     route_segments->back().SetId(route_segment_id);
     route_segments->back().SetStopForDestination(stop_for_destination_);
     if (index == passage_index) {
@@ -494,7 +494,7 @@ bool PncMap::GetNearestPointFromRouting(const VehicleState &state,
   const double kHeadingBuffer = M_PI / 10.0;
   waypoint->lane = nullptr;
   std::vector<LaneInfoConstPtr> lanes;
-  auto point = common::util::MakePointENU(state.x(), state.y(), state.z());
+  const auto point = PointFactory::ToPointENU(state);
   const int status =
       hdmap_->GetLanesWithHeading(point, kMaxDistance, state.heading(),
                                   M_PI / 2.0 + kHeadingBuffer, &lanes);
@@ -534,7 +534,7 @@ bool PncMap::GetNearestPointFromRouting(const VehicleState &state,
         return false;
       }
       // Use large epsilon to allow projection diff
-      constexpr double kEpsilon = 0.5;
+      static constexpr double kEpsilon = 0.5;
       if (s > (lane->total_length() + kEpsilon) || (s + kEpsilon) < 0.0) {
         continue;
       }
@@ -619,7 +619,7 @@ bool PncMap::ExtendSegments(const RouteSegments &segments, double start_s,
     return false;
   }
   std::unordered_set<std::string> unique_lanes;
-  constexpr double kRouteEpsilon = 1e-3;
+  static constexpr double kRouteEpsilon = 1e-3;
   // Extend the trajectory towards the start of the trajectory.
   if (start_s < 0) {
     const auto &first_segment = *segments.begin();

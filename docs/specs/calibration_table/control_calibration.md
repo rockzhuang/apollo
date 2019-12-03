@@ -78,7 +78,7 @@ Firstly, please make sure you have already finished setting up the **Apollo Fuel
 
 https://github.com/ApolloAuto/apollo/blob/master/modules/tools/fuel_proxy/README.md
 
-This is **essential** before you can get enjoy control calibration or other Apollo Fuel based cloud service.
+This is **essential** before you can get enjoy control calibration or other Apollo Fuel-based cloud service.
 
 ## Folder Structure Requirement
 
@@ -90,7 +90,7 @@ Before uploading your data, take a note of:
    ```
    Origin Folder -> Task Folder ->Vehicle Folder -> Records + Configuration files
    ```
-1. A **task** folder needs to be created for your calibration job, such as task001, task002... 
+1. A **task** folder needs to be created for your calibration job, such as task001, task002...
 1. A vehicle folder needs to be created for your vehicle. The name of the folder should be the same as seen in Dreamview
 1. Inside your folder, create a **Records** folder to hold the data
 1. Store all the **Configuration files** along with the Records folder, within the **Vehicle** folder

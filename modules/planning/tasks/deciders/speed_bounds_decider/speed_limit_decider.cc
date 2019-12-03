@@ -20,6 +20,7 @@
 
 #include "modules/planning/tasks/deciders/speed_bounds_decider/speed_limit_decider.h"
 
+#include <algorithm>
 #include <limits>
 #include <tuple>
 
@@ -28,7 +29,6 @@
 
 #include "cyber/common/log.h"
 #include "modules/common/configs/vehicle_config_helper.h"
-#include "modules/common/util/util.h"
 #include "modules/planning/common/planning_gflags.h"
 
 namespace apollo {
@@ -199,15 +199,14 @@ Status SpeedLimitDecider::GetSpeedLimits(
     if (FLAGS_enable_nudge_slowdown) {
       curr_speed_limit = std::fmax(
           speed_bounds_config_.lowest_speed(),
-          common::util::MinElement(std::vector<double>{
-              speed_limit_from_reference_line, speed_limit_from_centripetal_acc,
-              centri_jerk_speed_limit, speed_limit_from_nearby_obstacles}));
+          std::min({speed_limit_from_reference_line,
+                    speed_limit_from_centripetal_acc, centri_jerk_speed_limit,
+                    speed_limit_from_nearby_obstacles}));
     } else {
-      curr_speed_limit = std::fmax(
-          speed_bounds_config_.lowest_speed(),
-          common::util::MinElement(std::vector<double>{
-              speed_limit_from_reference_line, speed_limit_from_centripetal_acc,
-              centri_jerk_speed_limit}));
+      curr_speed_limit = std::fmax(speed_bounds_config_.lowest_speed(),
+                                   std::min({speed_limit_from_reference_line,
+                                             speed_limit_from_centripetal_acc,
+                                             centri_jerk_speed_limit}));
     }
     speed_limit_data->AppendSpeedLimit(path_s, curr_speed_limit);
   }

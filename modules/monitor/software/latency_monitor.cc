@@ -23,18 +23,23 @@
 #include <utility>
 #include <vector>
 
+#include "absl/strings/str_cat.h"
 #include "cyber/common/log.h"
 #include "modules/common/adapters/adapter_gflags.h"
 #include "modules/monitor/common/monitor_manager.h"
+#include "modules/monitor/software/summary_monitor.h"
 
 DEFINE_string(latency_monitor_name, "LatencyMonitor",
               "Name of the latency monitor.");
 
-DEFINE_double(latency_monitor_interval, 2.0,
+DEFINE_double(latency_monitor_interval, 1.5,
               "Latency report interval in seconds.");
 
-DEFINE_double(latency_report_interval, 10.0,
+DEFINE_double(latency_report_interval, 15.0,
               "Latency report interval in seconds.");
+
+DEFINE_int32(latency_reader_capacity, 30,
+             "The max message numbers in latency reader queue.");
 
 namespace apollo {
 namespace monitor {
@@ -45,7 +50,6 @@ using apollo::common::LatencyRecordMap;
 using apollo::common::LatencyReport;
 using apollo::common::LatencyStat;
 using apollo::common::LatencyTrack;
-using apollo::common::util::StrCat;
 
 void FillInStat(const std::string& module_name, const uint64_t duration,
                 std::vector<std::pair<std::string, uint64_t>>* stats,
@@ -114,7 +118,7 @@ std::vector<std::pair<std::string, uint64_t>> GetFlowTrackStats(
     std::tie(begin_time, end_time, module_name) = *iter;
     if (!prev_name.empty()) {
       const std::string mid_name =
-          StrCat(prev_name, module_connector, module_name);
+          absl::StrCat(prev_name, module_connector, module_name);
       FillInStat(mid_name, begin_time - prev_end_time, &stats, total_duration);
       FillInTopo(prev_name, mid_name, topo);
       FillInTopo(mid_name, module_name, topo);
@@ -166,17 +170,29 @@ void LatencyMonitor::RunOnce(const double current_time) {
   static auto reader =
       MonitorManager::Instance()->CreateReader<LatencyRecordMap>(
           FLAGS_latency_recording_topic);
+  reader->SetHistoryDepth(FLAGS_latency_reader_capacity);
   reader->Observe();
-  const auto records = reader->GetLatestObserved();
-  if (records == nullptr || records->latency_records().empty()) {
-    return;
-  }
 
-  UpdateLatencyStat(records);
+  static std::string last_processed_key;
+  std::string first_key_of_current_round;
+  for (auto it = reader->Begin(); it != reader->End(); ++it) {
+    const std::string current_key =
+        absl::StrCat((*it)->module_name(), (*it)->header().sequence_num());
+    if (it == reader->Begin()) {
+      first_key_of_current_round = current_key;
+    }
+    if (current_key == last_processed_key) {
+      break;
+    }
+    UpdateLatencyStat(*it);
+  }
+  last_processed_key = first_key_of_current_round;
 
   if (current_time - flush_time_ > FLAGS_latency_report_interval) {
     flush_time_ = current_time;
-    PublishLatencyReport();
+    if (!track_map_.empty()) {
+      PublishLatencyReport();
+    }
   }
 }
 
@@ -194,6 +210,7 @@ void LatencyMonitor::PublishLatencyReport() {
       FLAGS_latency_reporting_topic);
   apollo::common::util::FillHeader("LatencyReport", &latency_report_);
   AggregateLatency();
+  ValidateMaxLatency();
   writer->Write(latency_report_);
   latency_report_.clear_header();
   track_map_.clear();
@@ -227,19 +244,52 @@ void LatencyMonitor::AggregateLatency() {
   // perception->prediction: min(0), max(5), average(3), sample_size(1000)
   // prediction: min(50), max(500), average(80), sample_size(800)
   // ...
-  const auto total_stat = GenerateStat(totals);
-  auto* total_duration_aggr = latency_report_.mutable_total_duration();
-  SetStat(total_stat, total_duration_aggr);
+  SetStat(GenerateStat(totals), latency_report_.mutable_total_duration());
 
   // Sort the modules following the messages flowing direction,
   // for better display
-  std::vector<std::string> topo_sorted_modules = topology_sort(&topo);
+  const auto topo_sorted_modules = topology_sort(&topo);
   auto* latency_tracks = latency_report_.mutable_latency_tracks();
   for (const auto& module_name : topo_sorted_modules) {
     auto* module_latency = latency_tracks->add_module_latency();
     module_latency->set_module_name(module_name);
     SetStat(GenerateStat(tracks[module_name]),
             module_latency->mutable_module_stat());
+  }
+}
+
+void LatencyMonitor::ValidateMaxLatency() {
+  auto manager = MonitorManager::Instance();
+  const auto& mode = manager->GetHMIMode();
+  auto* components = manager->GetStatus()->mutable_components();
+  for (const auto& iter : mode.monitored_components()) {
+    const std::string& name = iter.first;
+    if (iter.second.has_channel()) {
+      const auto config = iter.second.channel();
+      if (!config.has_max_latency_allowed()) {
+        continue;
+      }
+
+      auto* status = components->at(name).mutable_channel_status();
+      status->clear_status();
+
+      for (const auto& latency :
+           latency_report_.latency_tracks().module_latency()) {
+        if (latency.module_name() == config.name() &&
+            latency.module_stat().aver_duration() >
+                config.max_latency_allowed()) {
+          // send out alert
+          SummaryMonitor::EscalateStatus(
+              ComponentStatus::WARN,
+              absl::StrCat(config.name(), " has average latency ",
+                           latency.module_stat().aver_duration(), " > ",
+                           config.max_latency_allowed()),
+              status);
+        }
+      }
+
+      SummaryMonitor::EscalateStatus(ComponentStatus::OK, "", status);
+    }
   }
 }
 

@@ -22,12 +22,27 @@
 namespace apollo {
 namespace common {
 
-using apollo::common::util::StrCat;
+namespace {
+
 using apollo::cyber::Time;
+
+uint64_t ToNanoSeconds(const double seconds) {
+  static constexpr double kNanoSecondsFactor = 1e9;
+  return static_cast<uint64_t>(kNanoSecondsFactor * seconds);
+}
+
+};  // namespace
 
 LatencyRecorder::LatencyRecorder(const std::string& module_name)
     : module_name_(module_name) {
   records_.reset(new LatencyRecordMap);
+}
+
+void LatencyRecorder::AppendLatencyRecord(const uint64_t message_id,
+                                          const double begin_time,
+                                          const double end_time) {
+  AppendLatencyRecord(message_id, ToNanoSeconds(begin_time),
+                      ToNanoSeconds(end_time));
 }
 
 void LatencyRecorder::AppendLatencyRecord(const uint64_t message_id,
@@ -63,7 +78,7 @@ LatencyRecorder::CreateWriter() {
   if (node_ == nullptr) {
     current_timestamp_ = apollo::cyber::Time::Now().ToNanosecond();
     node_ = apollo::cyber::CreateNode(
-        StrCat(node_name_prefix, module_name_, current_timestamp_));
+        absl::StrCat(node_name_prefix, module_name_, current_timestamp_));
     if (node_ == nullptr) {
       AERROR << "unable to create node for latency recording";
       return nullptr;

@@ -19,6 +19,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
 
+#include "absl/strings/str_cat.h"
 #include "cyber/common/file.h"
 #include "cyber/common/log.h"
 #include "modules/common/math/math_utils.h"
@@ -263,8 +264,7 @@ void FusionCameraDetectionComponent::OnReceiveImage(
   std::lock_guard<std::mutex> lock(mutex_);
   const double msg_timestamp = message->measurement_time() + timestamp_offset_;
   AINFO << "Enter FusionCameraDetectionComponent::Proc(), "
-        << " camera_name: " << camera_name
-        << " image ts: " + std::to_string(msg_timestamp);
+        << " camera_name: " << camera_name << " image ts: " << msg_timestamp;
   // timestamp should be almost monotonic
   if (last_timestamp_ - msg_timestamp > ts_diff_) {
     AINFO << "Received an old message. Last ts is " << std::setprecision(19)
@@ -309,7 +309,7 @@ void FusionCameraDetectionComponent::OnReceiveImage(
   }
 
   bool send_sensorframe_ret = sensorframe_writer_->Write(prefused_message);
-  AINFO << "send out prefused msg, ts: " << std::to_string(msg_timestamp)
+  AINFO << "send out prefused msg, ts: " << msg_timestamp
         << "ret: " << send_sensorframe_ret;
   // Send output msg
   if (output_final_obstacles_) {
@@ -677,9 +677,9 @@ int FusionCameraDetectionComponent::InternalProc(
   Eigen::Affine3d camera2world_trans;
   if (!camera2world_trans_wrapper_map_[camera_name]->GetSensor2worldTrans(
           msg_timestamp, &camera2world_trans)) {
-    std::string err_str = "failed to get camera to world pose, ts: " +
-                          std::to_string(msg_timestamp) +
-                          " camera_name: " + camera_name;
+    const std::string err_str =
+        absl::StrCat("failed to get camera to world pose, ts: ", msg_timestamp,
+                     " camera_name: ", camera_name);
     AERROR << err_str;
     *error_code = apollo::common::ErrorCode::PERCEPTION_ERROR_TF;
     prefused_message->error_code_ = *error_code;
@@ -715,7 +715,7 @@ int FusionCameraDetectionComponent::InternalProc(
   if (!camera_obstacle_pipeline_->Perception(camera_perception_options_,
                                              &camera_frame)) {
     AERROR << "camera_obstacle_pipeline_->Perception() failed"
-           << " msg_timestamp: " << std::to_string(msg_timestamp);
+           << " msg_timestamp: " << msg_timestamp;
     *error_code = apollo::common::ErrorCode::PERCEPTION_ERROR_PROCESS;
     prefused_message->error_code_ = *error_code;
     return cyber::FAIL;
@@ -739,8 +739,7 @@ int FusionCameraDetectionComponent::InternalProc(
       MakeProtobufMsg(msg_timestamp, seq_num_, camera_frame.tracked_objects,
                       camera_frame.lane_objects, *error_code,
                       out_message) != cyber::SUCC) {
-    AERROR << "MakeProtobufMsg failed"
-           << " ts: " << std::to_string(msg_timestamp);
+    AERROR << "MakeProtobufMsg failed ts: " << msg_timestamp;
     *error_code = apollo::common::ErrorCode::PERCEPTION_ERROR_UNKNOWN;
     prefused_message->error_code_ = *error_code;
     return cyber::FAIL;
@@ -799,8 +798,8 @@ int FusionCameraDetectionComponent::InternalProc(
             camera_frame.tracked_objects, camera_frame.lane_objects,
             *error_code));
     bool send_viz_ret = camera_viz_writer_->Write(viz_msg);
-    AINFO << "send out camera visualization msg, ts: "
-          << std::to_string(msg_timestamp) << " send_viz_ret: " << send_viz_ret;
+    AINFO << "send out camera visualization msg, ts: " << msg_timestamp
+          << " send_viz_ret: " << send_viz_ret;
 
     cv::Mat output_image(image_height_, image_width_, CV_8UC3,
                          cv::Scalar(0, 0, 0));

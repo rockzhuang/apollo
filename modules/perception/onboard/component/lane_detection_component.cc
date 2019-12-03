@@ -27,6 +27,7 @@
 #include <string>
 #include <tuple>
 
+#include "absl/strings/str_cat.h"
 #include "cyber/common/file.h"
 #include "cyber/common/log.h"
 #include "modules/common/math/math_utils.h"
@@ -272,9 +273,8 @@ void LaneDetectionComponent::OnReceiveImage(
     const std::string &camera_name) {
   std::lock_guard<std::mutex> lock(mutex_);
   const double msg_timestamp = message->measurement_time() + timestamp_offset_;
-  AINFO << "Enter LaneDetectionComponent::Proc(), "
-        << " camera_name: " << camera_name
-        << " image ts: " + std::to_string(msg_timestamp);
+  AINFO << "Enter LaneDetectionComponent::Proc(), camera_name: " << camera_name
+        << " image ts: " << msg_timestamp;
   // timestamp should be almost monotonic
   if (last_timestamp_ - msg_timestamp > ts_diff_) {
     AINFO << "Received an old message. Last ts is " << std::setprecision(19)
@@ -595,9 +595,9 @@ int LaneDetectionComponent::InternalProc(
   Eigen::Affine3d camera2world_trans;
   if (!camera2world_trans_wrapper_map_[camera_name]->GetSensor2worldTrans(
           msg_timestamp, &camera2world_trans)) {
-    std::string err_str = "failed to get camera to world pose, ts: " +
-                          std::to_string(msg_timestamp) +
-                          " camera_name: " + camera_name;
+    const std::string err_str =
+        absl::StrCat("failed to get camera to world pose, ts: ", msg_timestamp,
+                     " camera_name: ", camera_name);
     AERROR << err_str;
     *error_code = apollo::common::ErrorCode::PERCEPTION_ERROR_TF;
     prefused_message->error_code_ = *error_code;
@@ -631,8 +631,8 @@ int LaneDetectionComponent::InternalProc(
 
   if (!camera_lane_pipeline_->Perception(camera_perception_options_,
                                          &camera_frame)) {
-    AERROR << "camera_lane_pipeline_->Perception() failed"
-           << " msg_timestamp: " << std::to_string(msg_timestamp);
+    AERROR << "camera_lane_pipeline_->Perception() failed msg_timestamp: "
+           << msg_timestamp;
     *error_code = apollo::common::ErrorCode::PERCEPTION_ERROR_PROCESS;
     prefused_message->error_code_ = *error_code;
     return cyber::FAIL;
