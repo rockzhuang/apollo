@@ -48,12 +48,8 @@ cc_library(
 
 cc_library(
     name = "udp_bridge_multi_receiver",
-    srcs = [
-        "udp_bridge_multi_receiver_component.cc",
-    ],
-    hdrs = [
-        "udp_bridge_multi_receiver_component.h",
-    ],
+    srcs = ["udp_bridge_multi_receiver_component.cc"],
+    hdrs = ["udp_bridge_multi_receiver_component.h"],
     copts = ['-DMODULE_NAME=\\"bridge\\"'],
     deps = [
         ":udp_bridge",

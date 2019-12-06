@@ -115,28 +115,18 @@ bool SpeedData::EvaluateByS(const double s,
     double s0 = p0.s();
     double s1 = p1.s();
 
-    common::SpeedPoint res;
-    res.set_s(s);
-
-    double t = common::math::lerp(p0.t(), s0, p1.t(), s1, s);
-    res.set_t(t);
-
+    speed_point->Clear();
+    speed_point->set_s(s);
+    speed_point->set_t(common::math::lerp(p0.t(), s0, p1.t(), s1, s));
     if (p0.has_v() && p1.has_v()) {
-      double v = common::math::lerp(p0.v(), s0, p1.v(), s1, s);
-      res.set_v(v);
+      speed_point->set_v(common::math::lerp(p0.v(), s0, p1.v(), s1, s));
     }
-
     if (p0.has_a() && p1.has_a()) {
-      double a = common::math::lerp(p0.a(), s0, p1.a(), s1, s);
-      res.set_a(a);
+      speed_point->set_a(common::math::lerp(p0.a(), s0, p1.a(), s1, s));
     }
-
     if (p0.has_da() && p1.has_da()) {
-      double da = common::math::lerp(p0.da(), s0, p1.da(), s1, s);
-      res.set_da(da);
+      speed_point->set_da(common::math::lerp(p0.da(), s0, p1.da(), s1, s));
     }
-
-    *speed_point = res;
   }
   return true;
 }

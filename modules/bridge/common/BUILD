@@ -41,9 +41,7 @@ cc_library(
 
 cc_library(
     name = "bridge_proto_diser_buf_factory",
-    hdrs = [
-        "bridge_proto_diser_buf_factory.h",
-    ],
+    hdrs = ["bridge_proto_diser_buf_factory.h"],
     deps = [
         "//modules/common/adapters:adapter_gflags",
     ],

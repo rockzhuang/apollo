@@ -54,9 +54,7 @@ cc_proto_library(
 
 proto_library(
     name = "perf_conf_proto",
-    srcs = [
-        "perf_conf.proto",
-    ],
+    srcs = ["perf_conf.proto"],
 )
 
 cc_proto_library(

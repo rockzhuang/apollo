@@ -77,12 +77,8 @@ cc_library(
 
 cc_library(
     name = "fem_pos_deviation_sqp_osqp_interface",
-    srcs = [
-        "fem_pos_deviation_sqp_osqp_interface.cc",
-    ],
-    hdrs = [
-        "fem_pos_deviation_sqp_osqp_interface.h",
-    ],
+    srcs = ["fem_pos_deviation_sqp_osqp_interface.cc"],
+    hdrs = ["fem_pos_deviation_sqp_osqp_interface.h"],
     copts = [
         "-DMODULE_NAME=\\\"planning\\\"",
     ],

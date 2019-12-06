@@ -57,12 +57,8 @@ cuda_library(
 
 cuda_library(
     name = "perception_inference_tensorrt_plugins_leakyrelu_cuda",
-    srcs = [
-        "leakyReLU_plugin.cu",
-    ],
-    hdrs = [
-        "leakyReLU_plugin.h",
-    ],
+    srcs = ["leakyReLU_plugin.cu"],
+    hdrs = ["leakyReLU_plugin.h"],
     deps = [
         "//modules/perception/inference/tensorrt:rt_common",
         "@cuda",
