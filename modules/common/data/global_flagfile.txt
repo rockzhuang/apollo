@@ -18,3 +18,5 @@
 --use_cyber_time=true
 
 --map_dir=/apollo/modules/map/data/double_lane_road
+
+--map_dir=/apollo/modules/map/data/shalun
